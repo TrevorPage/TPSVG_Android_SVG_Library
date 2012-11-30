@@ -93,7 +93,7 @@ public class SVGView extends ImageView {
 		}
 	  		
 	    if(bm == null){
-	    	bm = Bitmap.createBitmap(getMeasuredWidth(), getMeasuredHeight(), Bitmap.Config.ARGB_8888);  // ARGB_8888
+	    	bm = Bitmap.createBitmap(getMeasuredWidth(), getMeasuredHeight(), Bitmap.Config.ARGB_4444);  // ARGB_8888
 	    	svgImage.paintImage(new Canvas(bm), subtree, this, animHandler );
 		}
 
