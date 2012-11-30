@@ -1,6 +1,6 @@
 
 
-package com.trevorpage.tpsvg;
+package com.android.svgkit;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -22,7 +22,6 @@ import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
-import android.util.Log;
 import android.view.View;
 
 // SAX Library
@@ -37,7 +36,7 @@ import org.xml.sax.XMLReader;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
-public class Tpsvg extends DefaultHandler {
+public class TPSVG extends DefaultHandler {
 	
 	private class Properties {
 		
@@ -156,7 +155,7 @@ public class Tpsvg extends DefaultHandler {
 	Stack<SvgStyle> styleParseStack = new Stack<SvgStyle>();
 	
 	// User's animation / manipulation handler
-	//ItpsvgAnim animHandler;
+	//ITPSVGAnim animHandler;
 	
 	/*
 	 * Style class holds the stroke and fill Paint objects for each path.
@@ -380,11 +379,11 @@ public class Tpsvg extends DefaultHandler {
 
 	
 	
-	public Tpsvg(){
+	public TPSVG(){
 		
 	}
 	
-	public Tpsvg( Context context, int resourceID, ItpsvgAnim animHandler){
+	public TPSVG(Context context, int resourceID, ITPSVGAnim animHandler){
 //		this.animHandler = animHandler;
 		parseImageFile(context,resourceID);
 	}
@@ -1932,7 +1931,7 @@ private void parseAttributes(Attributes attributes){
 	// ------------------------------------------------------------------------------
 	// Associated with user's handler
 	
-	public void ___setAnimHandler( ItpsvgAnim animHandler){
+	public void ___setAnimHandler( ITPSVGAnim animHandler){
 		//this.animHandler = animHandler;
 		//parseImageFile(context,resourceID);
 	}
@@ -1960,7 +1959,7 @@ private void parseAttributes(Attributes attributes){
 	// ------------------------------------------------------------------------------
 	// Code Evaluator
 
-	public void paintImage( Canvas canvas, String groupNodeId, View view, ItpsvgAnim animHandler ){
+	public void paintImage( Canvas canvas, String groupNodeId, View view, ITPSVGAnim animHandler ){
 		//if(true)return;
 		//animHandler = animHandler;
 		Canvas mCanvas = canvas;

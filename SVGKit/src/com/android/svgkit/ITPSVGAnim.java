@@ -1,14 +1,14 @@
-package com.trevorpage.tpsvg;
+package com.android.svgkit;
 
 
-import com.trevorpage.tpsvg.Tpsvg.SvgStyle;
-import com.trevorpage.tpsvg.Tpsvg.Textstring;
+import com.android.svgkit.TPSVG.SvgStyle;
+import com.android.svgkit.TPSVG.Textstring;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 
-public interface ItpsvgAnim {
+public interface ITPSVGAnim {
 
 	/**
 	 * 
@@ -40,7 +40,7 @@ public interface ItpsvgAnim {
 	 * @return
 	 */
 	
-	boolean animTextElement(String id, int iteration, Matrix matrix, SvgStyle style, Textstring text, float x, float y);
+	boolean animTextElement(String id, int iteration, Matrix matrix, TPSVG.SvgStyle style, TPSVG.Textstring text, float x, float y);
 	
 	boolean arcParams(String id, Path path, float startAngle, float sweepAngle, RectF bounds);
 	
