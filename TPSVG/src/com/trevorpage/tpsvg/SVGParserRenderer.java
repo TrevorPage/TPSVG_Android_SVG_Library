@@ -2,6 +2,9 @@
 
 package com.trevorpage.tpsvg;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,6 +21,7 @@ import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Path.Direction;
 import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -37,46 +41,30 @@ import org.xml.sax.XMLReader;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
-public class Tpsvg extends DefaultHandler {
+public class SVGParserRenderer extends DefaultHandler {
 	
-	private class Properties {
-		
-		float x;
-		float y;
-		
-		float x1;
-		float y1;
-		float x2;
-		float y2;
-		float cx;
-		float cy;
-		
-		float radius;
-		float width;
-		float height;
-		
-		String pathData;
-		String transformData;
-		String styleData;
-		String pointsData;
-		SvgStyle svgStyle;
-
-		String id;
-		String xlink_href;
-	}
+	private static final String LOGTAG = "SVGParserRenderer";
+	private static final String ASSETS_FONTS_ROOT_DIRECTORY = "fonts";
 	
-	Properties mProperties;
+	/* Bytecode instruction set */
+	private static final byte INST_END 			= 0;
+	private static final byte INST_PATH			= 1;
+	private static final byte INST_MATRIX 		= 2;
+	private static final byte INST_BEGINGROUP	= 3;
+	private static final byte INST_ENDGROUP		= 4;
+	private static final byte INST_STYLE		= 5;
+	private static final byte INST_TEXTSTRING	= 6;
+	private static final byte INST_IDSTRING		= 7;
+	private static final byte INST_ARC			= 8;
 	
-	
-	private  View mView;
-	
-	// Define start tag strings
+	/* XML tags */
 	private static final String STARTTAG_SVG	= "svg";
 	private static final String STARTTAG_G		= "g";
 	private static final String STARTTAG_PATH	= "path";
 	private static final String STARTTAG_RECT	= "rect";
 	private static final String STARTTAG_LINE   = "line";
 	private static final String STARTTAG_POLYGON= "polygon";
+	private static final String STARTTAG_CIRCLE	= "circle";
 	private static final String STARTTAG_TEXT	= "text";
 	private static final String STARTTAG_TSPAN  = "tspan";
 	private static final String STARTTAG_TEXTPATH	= "textPath";
@@ -85,17 +73,11 @@ public class Tpsvg extends DefaultHandler {
 	private static final String STARTTAG_STOP	= "stop";
 	private static final String STARTTAG_DEFS 	= "defs";
 	
-	// Define special recognised prefix for ID strings.
-	// TODO: May be appropriate to define in anim interface.
 	private static final String SPECIAL_ID_PREFIX_ANIM = "_anim";
 	private static final String SPECIAL_ID_PREFIX_META = "_meta";
 	private static final String SPECIAL_ID_PREFIX_ARCPARAMS = "_arcparams";
-	
-	
-	
-	
-	private enum Attr{
-
+		
+	private enum Attr {
 		x, y, x1, y1, x2, y2, cx, cy, fx, fy, r,
 		height, width,
 		d,
@@ -106,16 +88,17 @@ public class Tpsvg extends DefaultHandler {
 		opacity,
 		fill,
 		fill_opacity,
-		font_size, 
+		font_size,
+		font_family,
 		stroke,
 		stroke_fill,
 		stroke_opacity,
 		stroke_width,	
+		text_align,
 		points,
 		novalue;
 		
-	    public static Attr toAttr(String str)
-	    {
+	    public static Attr toAttr(String str) {
 	        try {
 	            return valueOf(str.replace('-', '_'));
 	        } 
@@ -123,15 +106,12 @@ public class Tpsvg extends DefaultHandler {
 	            return novalue;
 	        }
 	    } 	
-		
 	}
 	
-	
-	private float rootSvgHeight = 100;
-	private float rootSvgWidth = 100;
+	private Properties mProperties;
+	private float mRootSvgHeight = 100;
+	private float mRootSvgWidth = 100;
 
-
-	
 	// Lists and stacks for executable code
 	ArrayList<Matrix> matrixList = new ArrayList<Matrix>();
 	ArrayList<Path> pathList = new ArrayList<Path>();
@@ -145,258 +125,100 @@ public class Tpsvg extends DefaultHandler {
 	
 	// Data structures used during parsing
 	private int tagDepth;
-	private String currElement;
-	Gradient currentGradient = new Gradient();
-	int codePtr;
-	ArrayList<Byte> bytecodeList; // Expandable list used for initial creation of bytecode from parsing. 
-	byte[] bytecodeArr; 		// Holds the complete bytecode for an SVG image once parsed. 
+	private String mCurrentElement;
+	private Gradient currentGradient = new Gradient();
+	private int codePtr;
+	private ArrayList<Byte> bytecodeList; // Expandable list used for initial creation of bytecode from parsing. 
+	private byte[] bytecodeArr; 		// Holds the complete bytecode for an SVG image once parsed. 
 	private Stack<Matrix> matrixEvStack = new Stack<Matrix>(); // Used for chaining transformations on nested nodes. 
 	private boolean[] matrixExistsAtDepth = new boolean [20];
-	Typeface ttfFont1;
-	Stack<SvgStyle> styleParseStack = new Stack<SvgStyle>();
+	//private Typeface ttfFont1;
+	private Stack<SvgStyle> mStyleParseStack = new Stack<SvgStyle>();
 	
-	// User's animation / manipulation handler
-	//ItpsvgAnim animHandler;
+	private Context mContext;
+	private String mPrivateDataNamespace = "msdroid:";
+	private HashMap<String, String> mPrivateDataMap;
+	private String mPrivateDataCurrentKey;
+	
+	
+	public SVGParserRenderer() {
+		mPrivateDataMap = new HashMap<String, String>();
+	}
+	
+	public SVGParserRenderer(Context context, int resourceID) {
+		mPrivateDataMap = new HashMap<String, String>();
+		parseImageFile(context, resourceID);
+	}
+
+	public SVGParserRenderer(Context context, File sourceFile) throws FileNotFoundException {
+		mPrivateDataMap = new HashMap<String, String>();
+		parseImageFile(context, sourceFile);
+	}
+
+	public SVGParserRenderer(Context context, InputStream sourceStream) {
+		mPrivateDataMap = new HashMap<String, String>();
+		parseImageFile(context, sourceStream);
+	}
+
+	// TODO:
+	// Possibly use sequence like
+	// new SVGParserRenderer(...).setApplicationNamespace(...).render();
 	
 	/*
-	 * Style class holds the stroke and fill Paint objects for each path.
-	 * It could later on also hold the Path too.
-	 * It could also contain the Matrix. Such Matrix and Paint objects can always be null
-	 * if not required, so there shouldn't be any memory penalty. 
-	 * Style class could be a subclass of e.g. svgPath class. 
-	 * 
-	 */
-	
-	public static class SvgStyle{
-	
-		Paint fillPaint;
-		Paint strokePaint;
-		
-		boolean hasFill;
-		boolean hasStroke;
-		
-		public float masterOpacity, fillOpacity, strokeOpacity;
-		
-		/**
-		 * Create a new SvgStyle object with all the default initial values applied in accordance with SVG
-		 * standards. 
-		 * Useful reference for style initial properties and inheritance rules:
-		 * http://www.w3.org/TR/SVG/painting.html
-		 * TODO: Still need to ensure that all properties are to the correct initial values. 
-		 */
-		public SvgStyle(){
-		
-			fillPaint = new Paint();
-			strokePaint = new Paint();
-			fillPaint.setStyle(Paint.Style.FILL);
-			strokePaint.setStyle(Paint.Style.STROKE);
-			fillPaint.setColor(0xff000000);
-			strokePaint.setColor(0xff000000);
-			masterOpacity=1;
-			fillOpacity=1;
-			strokeOpacity=1;
-			fillPaint.setAntiAlias(true);
-			strokePaint.setAntiAlias(true);
-			fillPaint.setStrokeWidth(1f);
-			strokePaint.setStrokeWidth(1f);		
-			fillPaint.setTextAlign(Paint.Align.LEFT);
-			strokePaint.setTextAlign(Paint.Align.LEFT);		
-			fillPaint.setTextSize(0.02f);
-			strokePaint.setTextSize(0.02f);		
-			fillPaint.setTextScaleX(1f);	
-			strokePaint.setTextScaleX(1f);			
-			fillPaint.setTypeface(Typeface.DEFAULT);
-			strokePaint.setTypeface(Typeface.DEFAULT);		
-			hasFill = true;
-			hasStroke = false;
-		}
-		
-		/**
-		 * Constructor that accepts an existing SvgStyle object to copy. It is this method that defines
-		 * what style properties an element inherits from the parent, or are not inherited and are defaulted
-		 * to some value.  It is provided so that a stack of
-		 * SvgStyle can be maintained, with each child inheriting from the parent initially but with
-		 * various properties overridden afterwards whenever a graphical element explicitly provides style
-		 * properties. It is this method that determines what inherits and what doesn't -- if any style must
-		 * always default to something rather than inherit, then this method should set that property
-		 * to an explicit value. 
-		 * @param s
-		 */
-		public SvgStyle(SvgStyle s){
-			
-			this.fillPaint = new Paint(s.fillPaint);
-			this.strokePaint = new Paint(s.fillPaint);
-			this.fillPaint.setStyle(Paint.Style.FILL);
-			this.strokePaint.setStyle(Paint.Style.STROKE);
-			this.fillPaint.setColor(s.fillPaint.getColor());
-			this.strokePaint.setColor(s.strokePaint.getColor());
-			this.masterOpacity = s.masterOpacity;
-			this.fillOpacity = s.fillOpacity;
-			this.strokeOpacity = s.strokeOpacity;
-			this.fillPaint.setAntiAlias(true);
-			this.strokePaint.setAntiAlias(true);
-			this.fillPaint.setStrokeWidth(1f);
-			this.strokePaint.setStrokeWidth(1f);		
-			this.fillPaint.setTextAlign(Paint.Align.LEFT);
-			this.strokePaint.setTextAlign(Paint.Align.LEFT);		
-			this.fillPaint.setTextSize(s.fillPaint.getTextSize());
-			this.strokePaint.setTextSize(s.strokePaint.getTextSize());		
-			this.fillPaint.setTextScaleX(s.fillPaint.getTextScaleX());	
-			this.strokePaint.setTextScaleX(s.strokePaint.getTextScaleX());			
-			this.fillPaint.setTypeface(Typeface.DEFAULT);
-			this.strokePaint.setTypeface(Typeface.DEFAULT);		
-			this.hasFill = s.hasFill;
-			this.hasStroke = s.hasStroke;
-			
-			
-		}
-	
-	}
-	
-	
-	/**
-	 * Class that stores the current positions in all of the list structures when parsing begins
-	 * for a given group element in the SVG file.  
-	 * @author trev
-	 *
-	 */
-	private class GroupJumpTo {
-		// TODO: It would be much better I think if this object were to contain all code to 
-		// perform the 'jump to'. So, it could have a method jumpTo, which could accept the
-		// group ID to jump to. Perhaps it could all be static and contain the jumpTo map within?
-		int bytecodePosition;
-		int pathListPosition;
-		int matrixListPosition;
-		int styleListPosition;
-		int textstringListPosition;
-		int idstringListPosition;
-		int arcsListPosition;
-		public GroupJumpTo(	int bytecodePosition, int pathListPosition, 
-							int matrixListPosition, int styleListPosition, 
-							int textstringListPosition, int idstringListPosition,
-							int arcsListPosition ){
-			this.bytecodePosition = bytecodePosition;
-			this.pathListPosition = pathListPosition;
-			this.matrixListPosition = matrixListPosition;
-			this.styleListPosition = styleListPosition;
-			this.textstringListPosition = textstringListPosition;
-			this.idstringListPosition = idstringListPosition;
-			this.arcsListPosition = arcsListPosition;
-		}
+	public SVGParserRenderer(Context context, int resourceID, Map<String, String> metaDataQueryMap) {
+		//mMetaDataQueryMap = new HashMap<String, String>();
+		mMetaDataQueryMap = metaDataQueryMap;
+		parseImageFile(context, resourceID);
 	}
 
-	
-	
-	/**
-	 * Class to encapsulate a gradient.
-	 * Alternatively we could have a map of Shader, with the key being the ID. 
-	 * 
-	 * A Gradient object is made up in several stages: initially a Gradient is created
-	 * and used to store any information from attributes within the <linearGradient> or
-	 * <radialGradient> start tag. We may then have child elements such as <stop> which add
-	 * further information like stop colours to the current gradient. 
-	 * 
-	 */
-	
-	private class Gradient{
-	
-		boolean isRadial = false;
-		Shader shader;
-		Matrix matrix;
-		String id;
-		float x1,y1,x2,y2,cx,cy,radius;
-		String href = null;
-		
-		
-		// Using a simple array might be better
-		ArrayList<Integer> stopColours = new ArrayList<Integer>(); // Could be a member of Gradient
-		
-		public Gradient(){
-			
-		}
-			
-		public void setCoordinates(float x1, float y1, float x2, float y2){
-			this.x1 = x1;
-			this.y1 = y1;
-			this.x2 = x2;
-			this.y2 = y2;
-		}
-		
+	public SVGParserRenderer(Context context, File sourceFile, Map<String, String> metaDataQueryMap) throws FileNotFoundException {
+		//mMetaDataQueryMap = new HashMap<String, String>();
+		mMetaDataQueryMap = metaDataQueryMap;
+		parseImageFile(context, sourceFile);
 	}
-	
-	/**
-	 * Represents a single line of text. Encapsulates data parsed from the SVG file needed
-	 * to render the text to Canvas. 
-	 * @author trev
-	 *
-	 */
-	public class Textstring{
-		//TODO: Require an index into either a list of Strings or a single large char[] buffer.
-		//The char[] buffer could be contained within this object - perhaps that makes most sense.
-		public final float x, y;
-		public char[]	charBuf;
-		public int 		charLength;
 
-		public StringBuilder string;
-		
-		public Textstring(float x, float y, char[] src, int srcPos, int length){
-			this.x = x;
-			this.y = y;
-			this.charLength = length;
-			this.charBuf = new char[length+1];
-			System.arraycopy( src, srcPos, this.charBuf, 0, length );
-			this.charBuf[length] = 0;
-			this.string = new StringBuilder();
-			this.string.append(src, srcPos, length);
-		
-		}
+	public SVGParserRenderer(Context context, InputStream sourceStream, Map<String, String> metaDataQueryMap) {
+		//mMetaDataQueryMap = new HashMap<String, String>();
+		mMetaDataQueryMap = metaDataQueryMap;
+		parseImageFile(context, sourceStream);
 	}
-	
-	private class Arc{
-		RectF bounds;
-		float angleStart;
-		float angleExtent;
-		String animId;
-		public Arc(RectF bounds, float angleStart, float angleExtent, String animId){
-			this.bounds = bounds;
-			this.angleStart = angleStart;
-			this.angleExtent = angleExtent;
-			this.animId = animId;
-		}
-	}
-	
-	
-	// Definition of the 'bytecode' instruction set. TODO: These could quite literally use byte
-	// or whatever is the best primitive type to use. 
-	private static final byte INST_END 			= 0;
-	private static final byte INST_PATH			= 1;
-	private static final byte INST_MATRIX 		= 2;
-	private static final byte INST_BEGINGROUP	= 3;
-	private static final byte INST_ENDGROUP		= 4;
-	private static final byte INST_STYLE		= 5;
-	private static final byte INST_TEXTSTRING	= 6;
-	private static final byte INST_IDSTRING		= 7;
-	private static final byte INST_ARC			= 8;
+	*/
 
 	
-	
-	public Tpsvg(){
-		
+	public void setPrivateDataNamespace(String namespace) {
+		mPrivateDataNamespace = namespace;
 	}
 	
-	public Tpsvg( Context context, int resourceID, ItpsvgAnim animHandler){
-//		this.animHandler = animHandler;
-		parseImageFile(context,resourceID);
+	public String getPrivateDataValue(String key) {
+		return mPrivateDataMap.get(key);
 	}
-		
-	public void parseImageFile( Context context, int resourceID)  {
-		
+	
+	public void obtainSVGPrivateData(ITpsvgController controller) {
+	    Iterator<Map.Entry<String, String>> it = mPrivateDataMap.entrySet().iterator();
+	    while (it.hasNext()) {
+	        Map.Entry<String, String> pairs = (Map.Entry<String, String>)it.next();
+	        controller.onSVGPrivateData(pairs.getKey(), pairs.getValue());
+	        //it.remove(); // avoids a ConcurrentModificationException
+	    }
+	}
+	
+	public void parseImageFile(Context context, File sourceFile) throws FileNotFoundException {
+		InputStream inStream = new FileInputStream(sourceFile);
+		parseImageFile(context, inStream);
+	}
+	
+	public void parseImageFile(Context context, int resourceID) {
+		Resources res = context.getResources();			
+		InputStream inStream = res.openRawResource(resourceID);	
+		parseImageFile(context, inStream);
+	}
+	
+	public void parseImageFile(Context context, InputStream inStream) {
+		mContext = context;
 		tagDepth = 0;
 		codePtr = 0;
 		mProperties = new Properties();
-		//ttfFont1 = Typeface.createFromAsset(context.getAssets(), "fonts/helveticabold.ttf");  
-	
-		
+
 		this.gradientList.clear();
 		this.matrixList.clear();
 		matrixEvStack.clear();
@@ -406,21 +228,21 @@ public class Tpsvg extends DefaultHandler {
 		this.arcsList.clear();
 		
 		bytecodeList = new ArrayList<Byte>();
-		
+//		mMetaDataQueryMap.clear();
 		
 		// Initialise the style stack with a first entry containing all of the default values. 
 
 		SvgStyle s = new SvgStyle();
 
-		styleParseStack.add(s);
+		mStyleParseStack.add(s);
 		
 
 		
 		// TODO: Possibly stuff for constructor
-		InputStream inStream = null;
-		Resources res = context.getResources();			
+		//InputStream inStream = null;
+		//Resources res = context.getResources();			
 
-		inStream = res.openRawResource(/*R.raw.gaugetest20*/ resourceID);
+		//inStream = res.openRawResource(/*R.raw.gaugetest20*/ resourceID);
 		SAXParserFactory spf = SAXParserFactory.newInstance();
 		try{
 			SAXParser sp = spf.newSAXParser();
@@ -438,6 +260,7 @@ public class Tpsvg extends DefaultHandler {
 			bytecodeArr[i] = bytecodeList.get(i);
 		}
 
+		mContext = null;
 	}
 	
 	
@@ -446,12 +269,18 @@ public class Tpsvg extends DefaultHandler {
     public void characters(char[] ch, int start, int length) throws SAXException {
         super.characters(ch, start, length);
         
-        if(currElement.equalsIgnoreCase(STARTTAG_TEXT)){
-        	text(ch, start, length);
+        if (mCurrentElement.equalsIgnoreCase(STARTTAG_TEXT)) {
+        	text_characters(ch, start, length);
         }
-        else if (currElement.equalsIgnoreCase(STARTTAG_TSPAN)){
-        	text(ch, start, length);
-        }         
+        
+        else if (mCurrentElement.equalsIgnoreCase(STARTTAG_TSPAN)) {
+        	tspan_characters(ch, start, length);
+        }
+        
+        else if (mPrivateDataCurrentKey != null) {
+        	mPrivateDataMap.put(mPrivateDataCurrentKey, new String(ch, start, length));
+        }
+        
     }
     
     
@@ -460,8 +289,8 @@ public class Tpsvg extends DefaultHandler {
             throws SAXException {
         super.endElement(uri, localName, name);
         
-        
-        currElement = "";
+        mPrivateDataCurrentKey = "";
+        mCurrentElement = "";
         
         if (localName.equalsIgnoreCase(STARTTAG_G)){
         	addEndGroup();
@@ -483,7 +312,7 @@ public class Tpsvg extends DefaultHandler {
         }
         
 
-        styleParseStack.pop();
+        mStyleParseStack.pop();
     }
     
 
@@ -496,19 +325,23 @@ public class Tpsvg extends DefaultHandler {
      * Requires optimisation - lots of if / else that could be removed. 
      */
     @Override
-    public void startElement(String uri, String localName, String name,
+    public void startElement(String uri, String localName, String qName,
             Attributes attributes) throws SAXException {
     	
-        super.startElement(uri, localName, name, attributes);
-        
-        //Log.d(LOGTAG, "startElement: "+localName );
+        super.startElement(uri, localName, qName, attributes);
         
         matrixExistsAtDepth[tagDepth] = false;
-        currElement=localName;
+        mCurrentElement = localName;       
+        mProperties.svgStyle = new SvgStyle(mStyleParseStack.peek());
         
-        mProperties.svgStyle = new SvgStyle(styleParseStack.peek());
+        if (mPrivateDataNamespace != null && qName.startsWith(mPrivateDataNamespace)) {
+        	mPrivateDataCurrentKey = localName;
+        }
+        else {
+        	mPrivateDataCurrentKey = null;
+        }
         
-        if(localName.equalsIgnoreCase(STARTTAG_SVG)){
+        if(localName.equalsIgnoreCase(STARTTAG_SVG)) {
         	parseAttributes(attributes);
         	svg();
         }
@@ -516,43 +349,48 @@ public class Tpsvg extends DefaultHandler {
         	parseAttributes(attributes);
         	addBeginGroup(mProperties.id);
         }
-        else if (localName.equalsIgnoreCase(STARTTAG_PATH)){
+        else if (localName.equalsIgnoreCase(STARTTAG_PATH)) {
         	parseAttributes(attributes);
         	path();
         }
-        else if (localName.equalsIgnoreCase(STARTTAG_RECT)){
+        else if (localName.equalsIgnoreCase(STARTTAG_RECT)) {
         	parseAttributes(attributes);
         	rect();
         }
-        else if (localName.equalsIgnoreCase(STARTTAG_LINE)){
+        else if (localName.equalsIgnoreCase(STARTTAG_LINE)) {
         	parseAttributes(attributes);
         	line();
         }
-        else if (localName.equalsIgnoreCase(STARTTAG_POLYGON)){
+        else if (localName.equalsIgnoreCase(STARTTAG_POLYGON)) {
         	parseAttributes(attributes);
         	polygon();
         }
-        else if (localName.equalsIgnoreCase(STARTTAG_TEXT)){
+        else if (localName.equalsIgnoreCase(STARTTAG_CIRCLE)) {
         	parseAttributes(attributes);
-        }
-        else if (localName.equalsIgnoreCase(STARTTAG_TSPAN)){
+        	circle();
+        }        
+        else if (localName.equalsIgnoreCase(STARTTAG_TEXT)) {
         	parseAttributes(attributes);
+        	text_element();
         }
-        else if (localName.equalsIgnoreCase(STARTTAG_LINEARGRADIENT)){
-        	parseAttributes(attributes);  // !!!!!!!!!!!!!!!!!!!!!!!!
+        else if (localName.equalsIgnoreCase(STARTTAG_TSPAN)) {
+        	parseAttributes(attributes);
+        	tspan_element();
+        }
+        else if (localName.equalsIgnoreCase(STARTTAG_LINEARGRADIENT)) {
+        	parseAttributes(attributes);
         	linearGradient();
         }
-        else if (localName.equalsIgnoreCase(STARTTAG_RADIALGRADIENT)){
-        	parseAttributes(attributes);  // !!!!!!!!!!!!!!!!!!!!!!!!
+        else if (localName.equalsIgnoreCase(STARTTAG_RADIALGRADIENT)) {
+        	parseAttributes(attributes);  
         	radialGradient();
         }
-        else if (localName.equalsIgnoreCase(STARTTAG_STOP)){
+        else if (localName.equalsIgnoreCase(STARTTAG_STOP)) {
         	parseAttributes(attributes);
         	gradientStop();
         }        
         
-        
-        styleParseStack.add(mProperties.svgStyle);
+        mStyleParseStack.add(mProperties.svgStyle);
         tagDepth++;
     }
     
@@ -586,10 +424,10 @@ private void parseAttributes(Attributes attributes){
 		// can be present in an SVG file as either normal attributes, or contained as key/values
 		// in the value of a <style> tag; we need to be able to process both situations. 
 
-    	for(int n=0;n<attrImpl.getLength();n++){
+    	for (int n = 0; n < attrImpl.getLength(); n++) {
     	
     		v = attrImpl.getValue(n).trim(); // Value could contain prefix/suffix spaces; remove them. 
-    		switch(Attr.toAttr(attrImpl.getLocalName(n))){
+    		switch (Attr.toAttr(attrImpl.getLocalName(n))) {
     	  	
     			case x:
 		    		mProperties.x = parseCoOrdinate(v); 
@@ -666,6 +504,14 @@ private void parseAttributes(Attributes attributes){
 		        case font_size:
 		        	s.strokePaint.setTextSize(parseCoOrdinate(v));
 		        	s.fillPaint.setTextSize(parseCoOrdinate(v));
+		        	break;
+		       	
+		        case font_family:
+		        	Typeface typeface = getTypeface(v);
+		        	//if (typeface != null) {
+			        	s.strokePaint.setTypeface(typeface);
+			        	s.fillPaint.setTypeface(typeface);	
+		        	//}
 		        	break;
 	        
 		        case fill:
@@ -749,6 +595,19 @@ private void parseAttributes(Attributes attributes){
 				    		
 		        case points:
 		        	mProperties.pointsData = v;
+		        	break;
+		        	
+		        case text_align:
+		        	Paint.Align align = Paint.Align.LEFT;
+		        	if (v.startsWith("center")) {
+		        		align = Paint.Align.CENTER;
+		        	}
+		        	else if (v.startsWith("right")) {
+		        		align = Paint.Align.RIGHT;
+		        	}		        	
+		        	
+		        	s.strokePaint.setTextAlign(align);
+		        	s.fillPaint.setTextAlign(align);
 		        	break;
 					
 				default:
@@ -1052,21 +911,26 @@ private void parseAttributes(Attributes attributes){
     		}
     	}
     	return -1;
-    }
-    
+    }    
     
     private void svg(){
-    	this.rootSvgHeight = mProperties.height;
-    	this.rootSvgWidth = mProperties.width;
-    	//setCanvasScaleToSVG();
-    }
+    	mRootSvgHeight = mProperties.height;
+    	mRootSvgWidth = mProperties.width;
+    }    
     
-    
-	private void rect(){
+	private void rect() {
 		Path p = new Path();
 		p.addRect( mProperties.x, mProperties.y, (mProperties.x+mProperties.width), (mProperties.y+mProperties.height), Path.Direction.CW );
 		currentX = mProperties.x;
 		currentY = mProperties.y;
+		addPath(p);
+	}
+	
+	private void circle() {
+		Path p = new Path();
+		p.addCircle(mProperties.cx, mProperties.cy, mProperties.radius, Direction.CW);
+		currentX = mProperties.cx;
+		currentY = mProperties.cy;
 		addPath(p);
 	}
 	
@@ -1080,20 +944,45 @@ private void parseAttributes(Attributes attributes){
 	}
 
 	
+	
+	
+	private void text_element() {
+		addStyle();
+		//if (mProperties.transformData != null) {
+			addTransform();
+		//}
+	}
+	
 	/**
 	 * To be called from the XML character data handler when we are inside an element associated
 	 * with display of text ('text', 'tspan', 'tref', 'textPath'). 
 	 */
-	private void text(char[] src, int srcPos, int length){
-		addStyle();
+	private void text_characters(char[] src, int srcPos, int length) {
+		//addStyle();
 		this.textstringList.add( new Textstring(mProperties.x, mProperties.y, src, srcPos, length) );
 		// Assume for now that all textstrings have a matrix
-		//if(this.mProperties.transformData!=null){
-			addTransform();
+		//if (mProperties.transformData != null) {
+		//	addTransform();
 		//}
 		addText();
 	}
 
+	private void tspan_element() {
+		addStyle();
+		//if (mProperties.transformData != null) {
+			addTransform();
+		//}		
+	}
+	
+	private void tspan_characters(char[] src, int srcPos, int length) {	
+		this.textstringList.add( new Textstring(mProperties.x, mProperties.y, src, srcPos, length) );
+		// Assume for now that all textstrings have a matrix
+		//if (mProperties.transformData != null) {
+		//	addTransform();
+		//}
+		addText();	
+	}
+	
 	static float currentX;
 	static float currentY;
 	static float lastControlPointX = 0;
@@ -1196,11 +1085,11 @@ private void parseAttributes(Attributes attributes){
 				x = t.tokenF;
 				t.getToken(null);
 				y = t.tokenF;
-				if(currentCommandLetter=='a'){
+				if (currentCommandLetter == 'a' ) {
 					x+=currentX;
 					y+=currentY;
 				}		
-				arcTo(p,rx,ry,x_axis_rotation,large_arc_flag,sweep_flag,x,y);			
+				arcTo(p, rx, ry, x_axis_rotation, large_arc_flag, sweep_flag, x, y);			
 				currentX = x;
 				currentY = y;				
 				break;
@@ -1332,7 +1221,16 @@ private void parseAttributes(Attributes attributes){
 						f2 = t.tokenF;		
 						// Possibly use .postTranslate to apply over a previous transformation
 	
-						m.setTranslate(f1, f2);
+						m.postTranslate(f1, f2);
+	
+					}
+
+					else if(t.tokenStr.equalsIgnoreCase("rotate")){
+						t.getToken(null);
+						f1 = t.tokenF;
+						// Possibly use .postTranslate to apply over a previous transformation
+	
+						m.postRotate(f1);
 	
 					}
 					
@@ -1353,13 +1251,15 @@ private void parseAttributes(Attributes attributes){
 						f[6] = 0;
 						f[7] = 0;
 						f[8] = 1;
+						Matrix post = new Matrix();
+						post.setValues(f);
+						m.postConcat(post);
 						
-						m.setValues(f);
-						m.getValues(f);
+						//m.getValues(f);
 						//m.MTRANS_X is 2
 						//m.MTRANS_Y is 5
 						
-						m.setValues(f);
+						//m.setValues(f);
 					}
 				}
 				
@@ -1525,7 +1425,12 @@ private void parseAttributes(Attributes attributes){
 	}
 	
 	/**
-	 * This method converts an SVG arc to an Android Canvas ARC. 
+	 * This method converts an SVG arc to an Android Canvas arc.
+	 * 
+	 * Based on an example found on StackOverflow which in turn was based on:
+	 * http://www.java2s.com/Code/Java/2D-Graphics-GUI/AgeometricpathconstructedfromstraightlinesquadraticandcubicBeziercurvesandellipticalarc.htm
+	 * 
+	 * The example initially used turned out to have an error with the coef calculation, so it is a TODO to revisit this.
 	 * 
 	 * @param path
 	 * @param rx
@@ -1580,9 +1485,20 @@ private void parseAttributes(Attributes attributes){
         // Step 2 : Compute (cx1, cy1)
         //
         double sign = (largeArcFlag == sweepFlag) ? -1d : 1d;
-        float coef = (float) (sign * Math
-                        .sqrt(((Prx * Pry) - (Prx * Py1) - (Pry * Px1))
-                                        / ((Prx * Py1) + (Pry * Px1))));
+        
+        //float coef = (float) (sign * Math
+        //                .sqrt(((Prx * Pry) - (Prx * Py1) - (Pry * Px1))
+        //                                / ((Prx * Py1) + (Pry * Px1))));
+        
+
+        double sq = (((Prx * Pry) - (Prx * Py1) - (Pry * Px1))
+                                / ((Prx * Py1) + (Pry * Px1)));
+        
+        sq = (sq < 0) ? 0 : sq;
+        float coef = (float) (sign * Math.sqrt(sq)); 
+        
+        
+        
         float cx1 = coef * ((rx * y1) / ry);
         float cy1 = coef * -((ry * x1) / rx);
 
@@ -1642,6 +1558,27 @@ private void parseAttributes(Attributes attributes){
 //        }    
 	}
 
+	/**
+	 * Obtain a Tyepface from the assets fonts directory for the given name.
+	 * The fonts in the assets directory need to be lowercase. The actual font
+	 * looked for will be fontFamilyName appended with .ttf. 
+	 * If the font name contains space characters, the corresponding characters
+	 * in the filename of the assets font should be underscores.
+	 * @param fontFamilyName Font name. Will be made lowercase.
+	 * @return A Typeface, or null if not found in assets.
+	 */
+	private Typeface getTypeface(String fontFamilyName) {
+		fontFamilyName = fontFamilyName.replace(' ', '_');
+		try {
+			return Typeface.createFromAsset(	mContext.getAssets(), 
+					ASSETS_FONTS_ROOT_DIRECTORY + "/" + 
+					fontFamilyName.toLowerCase() + ".ttf");  			
+		}
+		catch (Exception e) {
+			return null;
+		}
+
+	}
 	
 	// The valueTokenizer is used for:
 	// - parsing 'transform' attribute string
@@ -1809,7 +1746,7 @@ private void parseAttributes(Attributes attributes){
 	// Scaling and measurement related methods
 	
 	private void setCanvasScaleToSVG( Canvas canvas, View view ){	
-		canvas.scale(view.getWidth()/this.rootSvgWidth, view.getHeight()/this.rootSvgHeight);
+		canvas.scale(view.getWidth() / mRootSvgWidth, view.getHeight()/ mRootSvgHeight);
 	}
 	
 	/**
@@ -1818,7 +1755,7 @@ private void parseAttributes(Attributes attributes){
 	 * @return
 	 */
 	public int getDocumentWidth(){
-		return Math.round(rootSvgWidth);
+		return Math.round(mRootSvgWidth);
 	}
 	
 	/**
@@ -1827,7 +1764,7 @@ private void parseAttributes(Attributes attributes){
 	 * @return
 	 */
 	public int getDocumentHeight(){
-		return Math.round(rootSvgHeight);
+		return Math.round(mRootSvgHeight);
 	}
 	
 	
@@ -1854,6 +1791,8 @@ private void parseAttributes(Attributes attributes){
 		// be wasteful as most Paths might have an identity Matrix (no transform). One
 		// way of optimising this could be to add an identity tranform ONLY if the previous
 		// path had a non-identity transform. 
+		// (I think what I meant by this is when you have two path elements in parallel, not nested.)
+		// (Or maintain a matrix stack in the evaluator.)
 		// Note: The parser uses a Matrix stack. The evaluator uses a Matrix list.
 		
 		//if(this.mProperties.transformData!=null){
@@ -1932,7 +1871,7 @@ private void parseAttributes(Attributes attributes){
 	// ------------------------------------------------------------------------------
 	// Associated with user's handler
 	
-	public void ___setAnimHandler( ItpsvgAnim animHandler){
+	public void ___setAnimHandler( ITpsvgController animHandler){
 		//this.animHandler = animHandler;
 		//parseImageFile(context,resourceID);
 	}
@@ -1953,31 +1892,33 @@ private void parseAttributes(Attributes attributes){
 	
 	Paint currentFillPaint = new Paint();
 	Paint currentStrokePaint = new Paint();
-	Matrix currentMatrix = new Matrix();
+	Matrix workingMatrix = new Matrix();
 	
 	float[] matrixValues = new float[9];
 	
 	// ------------------------------------------------------------------------------
 	// Code Evaluator
 
-	public void paintImage( Canvas canvas, String groupNodeId, View view, ItpsvgAnim animHandler ){
-		//if(true)return;
+	public void paintImage( Canvas canvas, String groupNodeId, View view, ITpsvgController animHandler ){
+
 		//animHandler = animHandler;
 		Canvas mCanvas = canvas;
-		Path p;
+		Path workingPath = new Path();
 		Path carryPath = new Path();
 		int gDepth = 1;
 
-		setCanvasScaleToSVG(mCanvas, view);
+		//setCanvasScaleToSVG(mCanvas, view);
 
-		// test background image:
-		//mCanvas.drawBitmap(backgroundBitmap, 0f, 0f, new Paint());
+		float uniformScaleFactor = Math.min(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
+		canvas.scale(uniformScaleFactor, uniformScaleFactor);
+		float excessY = (view.getHeight() / mRootSvgHeight) - uniformScaleFactor;
+		float excessX = view.getWidth() - (uniformScaleFactor * mRootSvgWidth);
 
 		codePtr = 0; 
 		// TBD: I think that previous Matrix is remaining attached to something, so have to instance
 		// a new one each time
 		//currentMatrix.reset();
-		currentMatrix = new Matrix();
+		workingMatrix = new Matrix();
 		matrixListIterator = matrixList.listIterator();
 		pathListIterator = pathList.listIterator();
 		styleListIterator = styleList.listIterator();	
@@ -1987,12 +1928,14 @@ private void parseAttributes(Attributes attributes){
 		boolean doSpecialIdCallbackForNextElement = false;
 		int animIteration;
 		String animId;
+		Matrix animMatrix = new Matrix();
+		Matrix shaderMatrix = new Matrix();
 		
-		if(groupNodeId != null){
+		if (groupNodeId != null) {
 			// TODO: It would be better if the GroupJumpTo object did all of this for us, or 
 			// even better if all the data structures were somehow grouped together into a parent
 			// class and this was one of its methods. 
-			if(subtreeJumpMap.containsKey(groupNodeId)){
+			if (subtreeJumpMap.containsKey(groupNodeId)) {
 				GroupJumpTo jumpTo=subtreeJumpMap.get(groupNodeId);
 				codePtr = jumpTo.bytecodePosition;//-1;
 				matrixListIterator = matrixList.listIterator(jumpTo.matrixListPosition );
@@ -2000,6 +1943,7 @@ private void parseAttributes(Attributes attributes){
 				styleListIterator = styleList.listIterator(jumpTo.styleListPosition );
 				textstringListIterator = textstringList.listIterator(jumpTo.textstringListPosition );
 				idstringListIterator = idstringList.listIterator(jumpTo.idstringListPosition);
+				arcsListIterator = arcsList.listIterator(jumpTo.arcsListPosition);
 			}
 		}
 
@@ -2010,18 +1954,21 @@ private void parseAttributes(Attributes attributes){
 //		Matrix currentMatrix = new Matrix();
 		//SvgStyle currentStyle = null;
 		
-		if( bytecodeArr == null ){
+		if( bytecodeArr == null ) {
 			return;
 		}
 		
 		while( bytecodeArr[codePtr] != INST_END && gDepth > 0 ){
 				
-			switch( bytecodeArr[codePtr] ){
+			switch(bytecodeArr[codePtr]) {
 			
 			case INST_PATH:				
-				p = new Path(pathListIterator.next());
-				p.addPath(carryPath);
-				carryPath.rewind();  // or reset()?
+				workingPath.rewind();
+				workingPath.addPath(pathListIterator.next());
+				workingPath.addPath(carryPath);
+				workingPath.transform(workingMatrix);				
+				carryPath.rewind();  
+				
 			//	p = pathListIterator.next();
 				// If we assume a Matrix is included for every path, even if it's an empty matrix,
 				// then we always pop the matrix on path creation. On the other hand if
@@ -2032,18 +1979,25 @@ private void parseAttributes(Attributes attributes){
 								
 				animId = null;
 				animIteration = 0;
-				p.transform(currentMatrix);
+				
 				do{
 					
-					if(doSpecialIdCallbackForNextElement==true){
-						if(animId==null){
+					if (doSpecialIdCallbackForNextElement == true) {
+						if (animId == null) {
 							animId = idstringListIterator.next();
 						}
-						if(animHandler!=null){
-							Matrix animMatrix = new Matrix();
+						if(animHandler != null){
+							animMatrix.reset();
+							
+							// test - for 9-patch anchor idea
+							if (animId.equals("_animanchorright")) {
+								animMatrix.postTranslate(excessX, 0);
+							}
+							
+							
 							doSpecialIdCallbackForNextElement = 
 								animHandler.animElement(animId, animIteration++, animMatrix, currentStrokePaint, currentFillPaint);
-							p.transform(animMatrix);
+							workingPath.transform(animMatrix);
 						
 						}
 						else{
@@ -2051,52 +2005,58 @@ private void parseAttributes(Attributes attributes){
 						}
 					}
 				
-					Matrix shaderMatrix = null; 
-					if(currentFillPaint != null){
+					shaderMatrix = null; 
+					if(currentFillPaint != null) {
 	
 						Matrix copyShaderMatrix = null;
 						if(currentFillPaint.getShader()!=null){
 							shaderMatrix = new Matrix();
 							currentFillPaint.getShader().getLocalMatrix(shaderMatrix);
 							copyShaderMatrix = new Matrix(shaderMatrix); // Deep copy. 
-							copyShaderMatrix.postConcat(currentMatrix );
+							copyShaderMatrix.postConcat(workingMatrix );
 							currentFillPaint.getShader().setLocalMatrix(copyShaderMatrix);
 						}
 	
-						mCanvas.drawPath(p,currentFillPaint);
-						if(shaderMatrix!=null){
+						mCanvas.drawPath(workingPath, currentFillPaint);
+						if(shaderMatrix != null){
 							currentFillPaint.getShader().setLocalMatrix(shaderMatrix); // Restore shader's original Matrix 
 						}
 					}
 					
-					if(currentStrokePaint!=null){
+					if (currentStrokePaint != null) {
 						
-						currentMatrix.getValues(matrixValues);
-						Paint scaledPaint = new Paint(currentStrokePaint);
-						scaledPaint.setStrokeWidth(scaledPaint.getStrokeWidth() * ( ( Math.abs(matrixValues[Matrix.MSCALE_Y]) + Math.abs(matrixValues[Matrix.MSCALE_X]) ) / 2 ) );				
-						//float curStrkWidth = scaledPaint.getStrokeWidth();
-						//float newStrkWidth = ( Math.abs(f[Matrix.MSCALE_Y]) + Math.abs(f[Matrix.MSCALE_X]) ) / 2.0f ;
-						//newStrkWidth = curStrkWidth * newStrkWidth;
-						//scaledPaint.setStrokeWidth(newStrkWidth);
+						workingMatrix.getValues(matrixValues);
+						float storedStrokeWidth = currentStrokePaint.getStrokeWidth();
+						currentStrokePaint.setStrokeWidth(storedStrokeWidth * (Math.abs(matrixValues[Matrix.MSCALE_Y]) + Math.abs(matrixValues[Matrix.MSCALE_X]) / 2));
+						//Paint scaledPaint = new Paint(currentStrokePaint);
+						//scaledPaint.setStrokeWidth(scaledPaint.getStrokeWidth() * ( ( Math.abs(matrixValues[Matrix.MSCALE_Y]) + Math.abs(matrixValues[Matrix.MSCALE_X]) ) / 2 ) );				
+						
+						////float curStrkWidth = scaledPaint.getStrokeWidth();
+						////float newStrkWidth = ( Math.abs(f[Matrix.MSCALE_Y]) + Math.abs(f[Matrix.MSCALE_X]) ) / 2.0f ;
+						////newStrkWidth = curStrkWidth * newStrkWidth;
+						////scaledPaint.setStrokeWidth(newStrkWidth);
 						
 						
 						Matrix copyShaderMatrix = null;
-						if(currentStrokePaint.getShader()!=null){
+						
+						// TODO: Does this block now go after the mCanvas.drawPath?
+						if (currentStrokePaint.getShader() != null) {
 							shaderMatrix = new Matrix();
 							currentStrokePaint.getShader().getLocalMatrix(shaderMatrix);
 							copyShaderMatrix = new Matrix(shaderMatrix); // Deep copy. 
-							copyShaderMatrix.postConcat(currentMatrix);
+							copyShaderMatrix.postConcat(workingMatrix);
 							currentStrokePaint.getShader().setLocalMatrix(copyShaderMatrix);
 						}
-						mCanvas.drawPath(p,scaledPaint);
-	
+						
+						mCanvas.drawPath(workingPath, currentStrokePaint);
+						currentStrokePaint.setStrokeWidth(storedStrokeWidth);			
 					}
 									
-				}while(doSpecialIdCallbackForNextElement==true); 
+				} while(doSpecialIdCallbackForNextElement == true); 
 				break;
 				
 			case INST_MATRIX:
-				currentMatrix = matrixListIterator.next();
+				workingMatrix = matrixListIterator.next();
 				break;
 				
 			case INST_BEGINGROUP:
@@ -2142,7 +2102,7 @@ private void parseAttributes(Attributes attributes){
 			
 			case INST_TEXTSTRING:								
 				Textstring ts = textstringListIterator.next();				
-				currentMatrix.getValues(matrixValues);
+				workingMatrix.getValues(matrixValues);
 				//We might have already got the values for currentMatrix before, to save
 				//on this operation. 
 				//Paint scaledPaint = new Paint(currentStrokePaint);
@@ -2150,14 +2110,15 @@ private void parseAttributes(Attributes attributes){
 				
 				animId = null;
 				animIteration = 0;
+				animMatrix.reset();
 				do{
 
 					if(doSpecialIdCallbackForNextElement==true){
-						if(animId==null){
+						if(animId == null){
 							animId = idstringListIterator.next();
 						}
-						if(animHandler!=null){
-							Matrix animMatrix = new Matrix();
+						if(animHandler != null){
+							//animMatrix.reset(); //Matrix animMatrix = new Matrix();
 							doSpecialIdCallbackForNextElement = 
 								animHandler.animTextElement(animId, animIteration++, animMatrix, null, ts, ts.x + matrixValues[Matrix.MTRANS_X], ts.y + matrixValues[Matrix.MTRANS_Y] );
 							//p.transform(animMatrix);
@@ -2167,16 +2128,24 @@ private void parseAttributes(Attributes attributes){
 						}
 					}					
 					
+					mCanvas.save();
+					mCanvas.concat(animMatrix);
+					mCanvas.concat(workingMatrix);
+
 					if(currentStrokePaint!=null){
-						//currentStrokePaint.setTypeface(ttfFont1);					
-						mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x + matrixValues[Matrix.MTRANS_X], ts.y + matrixValues[Matrix.MTRANS_Y], currentStrokePaint);
+
+						mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x, ts.y, currentStrokePaint);
+		//				mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x + matrixValues[Matrix.MTRANS_X], ts.y + matrixValues[Matrix.MTRANS_Y], currentStrokePaint);
 					}
 					if(currentFillPaint!=null){
-						//currentFillPaint.setTypeface(ttfFont1);
-						mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x + matrixValues[Matrix.MTRANS_X], ts.y + matrixValues[Matrix.MTRANS_Y], currentFillPaint);
+
+						mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x, ts.y, currentFillPaint);
+		//				mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x + matrixValues[Matrix.MTRANS_X], ts.y + matrixValues[Matrix.MTRANS_Y], currentFillPaint);
 
 					}
-				}while(doSpecialIdCallbackForNextElement==true); 
+					
+					mCanvas.restore();
+				} while (doSpecialIdCallbackForNextElement == true); 
 				
 				break;
 				
@@ -2187,7 +2156,7 @@ private void parseAttributes(Attributes attributes){
 			case INST_ARC:
 				Arc arc = arcsListIterator.next();
 				//Path path = new Path();
-				if(animHandler!=null){
+				if(animHandler!=null) {
 					animHandler.arcParams(arc.animId, carryPath, arc.angleStart, arc.angleExtent, arc.bounds);
 				}
 				else{
@@ -2199,9 +2168,241 @@ private void parseAttributes(Attributes attributes){
 			codePtr++;			
 
 		}
-		
-
 	}	
+	
+
+	/**
+	 * Style class holds the stroke and fill Paint objects for each path.
+	 * It could later on also hold the Path too.
+	 * It could also contain the Matrix. Such Matrix and Paint objects can always be null
+	 * if not required, so there shouldn't be any memory penalty. 
+	 * Style class could be a subclass of e.g. svgPath class. 
+	 * 
+	 */
+	public static class SvgStyle{
+	
+		Paint fillPaint;
+		Paint strokePaint;
+		
+		boolean hasFill;
+		boolean hasStroke;
+		
+		public float masterOpacity, fillOpacity, strokeOpacity;
+		
+		/**
+		 * Create a new SvgStyle object with all the default initial values applied in accordance with SVG
+		 * standards. 
+		 * Useful reference for style initial properties and inheritance rules:
+		 * http://www.w3.org/TR/SVG/painting.html
+		 * TODO: Still need to ensure that all properties are to the correct initial values. 
+		 */
+		public SvgStyle(){
+		
+			fillPaint = new Paint();
+			strokePaint = new Paint();
+			fillPaint.setStyle(Paint.Style.FILL);
+			strokePaint.setStyle(Paint.Style.STROKE);
+			fillPaint.setColor(0xff000000);
+			strokePaint.setColor(0xff000000);
+			masterOpacity=1;
+			fillOpacity=1;
+			strokeOpacity=1;
+			fillPaint.setAntiAlias(true);
+			strokePaint.setAntiAlias(true);
+			fillPaint.setStrokeWidth(1f);
+			strokePaint.setStrokeWidth(1f);		
+			fillPaint.setTextAlign(Paint.Align.LEFT);
+			strokePaint.setTextAlign(Paint.Align.LEFT);		
+			fillPaint.setTextSize(0.02f);
+			strokePaint.setTextSize(0.02f);		
+			fillPaint.setTextScaleX(1f);	
+			strokePaint.setTextScaleX(1f);			
+			fillPaint.setTypeface(Typeface.DEFAULT);
+			strokePaint.setTypeface(Typeface.DEFAULT);		
+			hasFill = true;
+			hasStroke = false;
+		}
+		
+		/**
+		 * Constructor that accepts an existing SvgStyle object to copy. It is this method that defines
+		 * what style properties an element inherits from the parent, or are not inherited and are defaulted
+		 * to some value.  It is provided so that a stack of
+		 * SvgStyle can be maintained, with each child inheriting from the parent initially but with
+		 * various properties overridden afterwards whenever a graphical element explicitly provides style
+		 * properties. It is this method that determines what inherits and what doesn't -- if any style must
+		 * always default to something rather than inherit, then this method should set that property
+		 * to an explicit value. 
+		 * @param s
+		 */
+		public SvgStyle(SvgStyle s){
+			
+			this.fillPaint = new Paint(s.fillPaint);
+			this.strokePaint = new Paint(s.fillPaint);
+			this.fillPaint.setStyle(Paint.Style.FILL);
+			this.strokePaint.setStyle(Paint.Style.STROKE);
+			this.fillPaint.setColor(s.fillPaint.getColor());
+			this.strokePaint.setColor(s.strokePaint.getColor());
+			this.masterOpacity = s.masterOpacity;
+			this.fillOpacity = s.fillOpacity;
+			this.strokeOpacity = s.strokeOpacity;
+			this.fillPaint.setAntiAlias(true);
+			this.strokePaint.setAntiAlias(true);
+			this.fillPaint.setStrokeWidth(1f);
+			this.strokePaint.setStrokeWidth(1f);		
+			this.fillPaint.setTextAlign(s.fillPaint.getTextAlign());
+			this.strokePaint.setTextAlign(s.strokePaint.getTextAlign());		
+			this.fillPaint.setTextSize(s.fillPaint.getTextSize());
+			this.strokePaint.setTextSize(s.strokePaint.getTextSize());		
+			this.fillPaint.setTextScaleX(s.fillPaint.getTextScaleX());	
+			this.strokePaint.setTextScaleX(s.strokePaint.getTextScaleX());			
+			this.fillPaint.setTypeface(Typeface.DEFAULT);
+			this.strokePaint.setTypeface(Typeface.DEFAULT);		
+			this.hasFill = s.hasFill;
+			this.hasStroke = s.hasStroke;
+			
+			
+		}
+	
+	}
+	
+	
+	/**
+	 * Class that stores the current positions in all of the list structures when parsing begins
+	 * for a given group element in the SVG file.  
+	 * @author trev
+	 *
+	 */
+	private class GroupJumpTo {
+		// TODO: It would be much better I think if this object were to contain all code to 
+		// perform the 'jump to'. So, it could have a method jumpTo, which could accept the
+		// group ID to jump to. Perhaps it could all be static and contain the jumpTo map within?
+		int bytecodePosition;
+		int pathListPosition;
+		int matrixListPosition;
+		int styleListPosition;
+		int textstringListPosition;
+		int idstringListPosition;
+		int arcsListPosition;
+		public GroupJumpTo(	int bytecodePosition, int pathListPosition, 
+							int matrixListPosition, int styleListPosition, 
+							int textstringListPosition, int idstringListPosition,
+							int arcsListPosition ){
+			this.bytecodePosition = bytecodePosition;
+			this.pathListPosition = pathListPosition;
+			this.matrixListPosition = matrixListPosition;
+			this.styleListPosition = styleListPosition;
+			this.textstringListPosition = textstringListPosition;
+			this.idstringListPosition = idstringListPosition;
+			this.arcsListPosition = arcsListPosition;
+		}
+	}
+
+	
+	
+	/**
+	 * Class to encapsulate a gradient.
+	 * Alternatively we could have a map of Shader, with the key being the ID. 
+	 * 
+	 * A Gradient object is made up in several stages: initially a Gradient is created
+	 * and used to store any information from attributes within the <linearGradient> or
+	 * <radialGradient> start tag. We may then have child elements such as <stop> which add
+	 * further information like stop colours to the current gradient. 
+	 * 
+	 */
+	
+	private class Gradient{
+	
+		boolean isRadial = false;
+		Shader shader;
+		Matrix matrix;
+		String id;
+		float x1,y1,x2,y2,cx,cy,radius;
+		String href = null;
+		
+		
+		// Using a simple array might be better
+		ArrayList<Integer> stopColours = new ArrayList<Integer>(); // Could be a member of Gradient
+		
+		public Gradient(){
+			
+		}
+			
+		public void setCoordinates(float x1, float y1, float x2, float y2){
+			this.x1 = x1;
+			this.y1 = y1;
+			this.x2 = x2;
+			this.y2 = y2;
+		}
+		
+	}
+	
+	/**
+	 * Represents a single line of text. Encapsulates data parsed from the SVG file needed
+	 * to render the text to Canvas. 
+	 * @author trev
+	 *
+	 */
+	public class Textstring{
+		//TODO: Require an index into either a list of Strings or a single large char[] buffer.
+		//The char[] buffer could be contained within this object - perhaps that makes most sense.
+		public final float x, y;
+		public char[]	charBuf;
+		public int 		charLength;
+
+		public StringBuilder string;
+		
+		public Textstring(float x, float y, char[] src, int srcPos, int length){
+			this.x = x;
+			this.y = y;
+			this.charLength = length;
+			this.charBuf = new char[length+1];
+			System.arraycopy( src, srcPos, this.charBuf, 0, length );
+			this.charBuf[length] = 0;
+			this.string = new StringBuilder();
+			this.string.append(src, srcPos, length);
+		
+		}
+	}
+	
+	private class Arc {
+		RectF bounds;
+		float angleStart;
+		float angleExtent;
+		String animId;
+		public Arc(RectF bounds, float angleStart, float angleExtent, String animId){
+			this.bounds = bounds;
+			this.angleStart = angleStart;
+			this.angleExtent = angleExtent;
+			this.animId = animId;
+		}
+	}
+	
+	private class Properties {
+		
+		float x;
+		float y;
+		
+		float x1;
+		float y1;
+		float x2;
+		float y2;
+		float cx;
+		float cy;
+		
+		float radius;
+		float width;
+		float height;
+		
+		String pathData;
+		String transformData;
+		String styleData;
+		String pointsData;
+		SvgStyle svgStyle;
+
+		String id;
+		String xlink_href;
+	}
+
 }
 
 

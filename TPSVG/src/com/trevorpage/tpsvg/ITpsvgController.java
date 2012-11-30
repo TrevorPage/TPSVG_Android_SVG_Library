@@ -1,14 +1,14 @@
 package com.trevorpage.tpsvg;
 
 
-import com.trevorpage.tpsvg.Tpsvg.SvgStyle;
-import com.trevorpage.tpsvg.Tpsvg.Textstring;
+import com.trevorpage.tpsvg.SVGParserRenderer.SvgStyle;
+import com.trevorpage.tpsvg.SVGParserRenderer.Textstring;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 
-public interface ItpsvgAnim {
+public interface ITpsvgController {
 
 	/**
 	 * 
@@ -44,4 +44,9 @@ public interface ItpsvgAnim {
 	
 	boolean arcParams(String id, Path path, float startAngle, float sweepAngle, RectF bounds);
 	
+	void setSourceDocumentWidth(int width);
+	
+	void setSourceDocumentHeight(int height);
+
+	void onSVGPrivateData(String key, String value);
 }

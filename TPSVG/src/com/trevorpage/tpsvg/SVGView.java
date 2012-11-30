@@ -1,24 +1,30 @@
 package com.trevorpage.tpsvg;
 
-//import com.trevp.msDroid.SVGFlyweightFactory;
-
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.View;
 
 public class SVGView extends View  {
 	
+	@SuppressWarnings("unused")
 	private static final String LOGTAG = SVGView.class.getSimpleName();
+	private Paint mDrawPaint = new Paint();		
+	private SVGParserRenderer mSvgImage;
+	private ITpsvgController mController;
+	Bitmap mRenderBitmap = null;
+	boolean mEntireRedrawNeeded = false;
+	String subtree = null;
+	private int mRotation = 0;
+	Canvas mCanvas;
 
-	Paint drawPaint = new Paint();
-
-	// ----------------------------------------------------------------------
-		
-	Tpsvg svgImage;
-
+	// Tried using WeakReference<Bitmap> to avoid View-Bitmap memory leak issues, but this seems
+	// to lead to very frequent GC of the bitmaps, leading to terrible performance penalty. 
+	// WeakReference<Bitmap> bm;
+	
 	public SVGView(Context context) {
 		super(context);
 		init(context);	
@@ -39,9 +45,7 @@ public class SVGView extends View  {
 
 	@Override
 	protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec){
-
-		
-		
+		/*
 		int widthMode = MeasureSpec.getMode(widthMeasureSpec);
 		int widthSize = MeasureSpec.getSize(widthMeasureSpec);
 		
@@ -58,7 +62,11 @@ public class SVGView extends View  {
 		setMeasuredDimension(chosenDimension, chosenDimension);
 	
 		
-//		fsetMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec) );
+		//setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec) );
+		 
+		 */
+		
+		super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 	}
 	
 	
@@ -72,147 +80,88 @@ public class SVGView extends View  {
 	
 	// in case there is no size specified
 	private int getPreferredSize() {
-		return 300;
+		return 270;
 	}	
 
-	
-	
-	SVGFlyweightFactory svgFactory;
-	
-	// ------------------ Initialisation on construction -----------------------
-	
-	private void init(Context context){
-	
-
-		//this.svgConverter = new Tpsvg();
-		//svgConverter.setAnimHandler(this);   // ???? HOW ????	
-		//svgConverter.parseImageFile( this.getContext(), R.raw.gaugetest20);		
-		
-		svgFactory = SVGFlyweightFactory.getInstance();
-		
-		setDrawingCacheEnabled(false);
-		
-		//mScaleDetector = new ScaleGestureDetector(context, new ScaleListener());
-		//mGestureDetector = new GestureDetector(context, new CustomOnGestureListener());
-	
-		
-		//appState = (AppState)context.getApplicationContext();
-	
-		//mHandler.postDelayed(mUpdateTimeTask, 1000);
-		
-		
-		drawPaint.setAntiAlias(false);
-		drawPaint.setFilterBitmap(false);
-		drawPaint.setDither(false);		
-		
-
+	private void init(Context context) {		
+		setDrawingCacheEnabled(false);		
+		mDrawPaint.setAntiAlias(false);
+		mDrawPaint.setFilterBitmap(false);
+		mDrawPaint.setDither(false);		
+		mRotation = context.getResources().getConfiguration().orientation;
 	}
-		
-	
-	/**
-	 * 
-	 * @param id
-	 */
-	
-	ItpsvgAnim animHandler;
-	
-	public void setImageResource(int id, ItpsvgAnim animHandler){
-		svgImage = svgFactory.get(id, getContext(), animHandler);
-		this.animHandler = animHandler;
+			
+	public void setSVGRenderer(SVGParserRenderer image, String subtreeTagName) {
+		mSvgImage = image;
+		setSubtree(subtreeTagName);
 	}
 	
-	
-	
-	// --------------------------------------------------------------------------
-	// Tried using WeakReference<Bitmap> to avoid View-Bitmap memory leak issues, but this seems
-	// to lead to very frequent GC of the bitmaps, leading to terrible performance penalty. 
-	
-	Bitmap bm = null;
-	//WeakReference<Bitmap> bm;
-	boolean invalidateBitmap = false;
-	String subtree = null;
+	public void bindController(ITpsvgController controller) {	
+		if (mSvgImage == null) {
+			throw new IllegalStateException("The parsed SVG image object needs to be specified first.");
+		}
+		mController = controller;
+		// TODO: This is potentially going to be done multiple times, once for each child SVGView of the 
+		// widget. I question at the moment if / why the controller should be bound to the individual SVGViews
+		// and not directly to the SVGParserRenderer.
+		mController.setSourceDocumentHeight(mSvgImage.getDocumentHeight());
+		mController.setSourceDocumentWidth(mSvgImage.getDocumentWidth());
+		mSvgImage.obtainSVGPrivateData(mController);
+	}
 	
 	/**
 	 * Specify the particular subtree (or 'node') of the original SVG XML file that this view 
 	 * shall render. The default is null, which results in the entire SVG image being rendered.
 	 * @param nodeId
 	 */
-	public void setSubtree(String subtreeId){
+	public void setSubtree(String subtreeId) {
 		subtree = subtreeId;
 	}
 	
 
 	@Override
-	protected void onDraw(Canvas canvas){
-
-		if(invalidateBitmap){
-			bm = null;
-			invalidateBitmap = false;
-		}
-		
-	    //canvas.save(Canvas.MATRIX_SAVE_FLAG);
+	protected void onDraw(Canvas canvas) {
 	  		
-	    if(bm == null){
-	    	/*
-	    	// WeakReference way (potentially solves memory leak issues, but Bitmaps are GC'd way
-	    	// too often leading to poor performance)
-			bm = new WeakReference<Bitmap>(Bitmap.createBitmap(
-					getMeasuredWidth(),
-					getMeasuredHeight(),
-					Bitmap.Config.ARGB_8888));
-			svgImage.paintImage(new Canvas(bm.get()), subtree, this, animHandler );
-			*/
-	    	// Non-WeakReference way
-	    	bm = Bitmap.createBitmap(getMeasuredWidth(), getMeasuredHeight(), Bitmap.Config.ARGB_8888);  // ARGB_8888
-	    	svgImage.paintImage(new Canvas(bm), subtree, this, animHandler );
+	    if (mRenderBitmap == null) {    	
+	    	mRenderBitmap = Bitmap.createBitmap(getMeasuredWidth(), getMeasuredHeight(), Bitmap.Config.ARGB_8888);     	
+	    	mEntireRedrawNeeded = true;
+	    	mCanvas = new Canvas(mRenderBitmap);
+	    	//mCanvas.rotate(degrees, px, py)
 		}	
-	    /*
-	    else if(bm.get()==null){
-	    	// If .get() gives null then the bitmap has potentially been garbage collected. 
-			bm = new WeakReference<Bitmap>(Bitmap.createBitmap(
-					getMeasuredWidth(),
-					getMeasuredHeight(),
-					Bitmap.Config.ARGB_8888));
-			svgImage.paintImage(new Canvas(bm.get()), subtree, this, animHandler );
-		}		
-	    */
 	    
-	    //if(invalidateBitmap){
-	    //	
-	    //	svgImage.paintImage(new Canvas(bm.get()), subtree, this, animHandler);
-	    //	invalidateBitmap = false;
-	    //}
-		//Log.d(LOGTAG, "Drawing bitmap for: " + this.toString());
-		canvas.drawBitmap(bm, 0f, 0f, drawPaint );
-	    //canvas.restore();
+	    if (mEntireRedrawNeeded) {
+	    	mEntireRedrawNeeded = false;
+	    	mRenderBitmap.eraseColor(android.graphics.Color.TRANSPARENT);
+	    	Canvas c = new Canvas(mRenderBitmap);
+	    	
+	    	// hacky rotation idea test
+	    	/*
+	    	if (getWidth() != getHeight() && mRotation == 1) {
+		    	c.rotate(90, getWidth() / 2, getHeight() / 2);
+		    	c.scale(getWidth() / getHeight(), getHeight() / getWidth(), getWidth() / 2, getHeight() / 2);	
+	    	}
+	    	*/
+	    	
+	    	mSvgImage.paintImage(c, subtree, this, mController );
+	    }
+	    
+		canvas.drawBitmap(mRenderBitmap, 0f, 0f, mDrawPaint );
 		
-		
-		// test outline border
-		/*
-		Paint paint = new Paint();
-		paint.setStyle(Paint.Style.STROKE);
-		paint.setColor(Color.YELLOW);
-		paint.setStrokeWidth(0.5f);
-		paint.setAntiAlias(true);
-		canvas.drawRect(this.getLeft(), this.getTop(), getLeft()+getWidth(), getTop()+getWidth(), paint);
-	*/
 	}
 
-	
-	@Override
-	public void invalidate(){
-		//invalidateBitmap = true;
-		super.invalidate();
-	}
 	
 	/**
 	 * This could be called from non-UI thread.
 	 */
 	public void invalidateBitmap(){
-		invalidateBitmap = true;
-		//super.invalidate();
-		//proposed change with new wait/notify strategy
+		mEntireRedrawNeeded = true;
 		super.postInvalidate();
+	}
+	
+	@Override
+	protected void onSizeChanged (int w, int h, int oldw, int oldh) {
+		mRenderBitmap = null;
+		super.onSizeChanged(w, h, oldw, oldh);
 	}
 	
 
