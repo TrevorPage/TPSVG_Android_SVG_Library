@@ -1,6 +1,6 @@
 package com.android.svgkit;
 
-//import com.trevp.msDroid.SVGFlyweightFactory;
+//import com.trevp.msDroid.SVGKit;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -11,11 +11,9 @@ import android.util.Log;
 import android.widget.ImageView;
 
 public class SVGView extends ImageView {
-	private static final String LOGTAG = SVGView.class.getSimpleName();
-
-    SVGFlyweightFactory svgFactory;
+    SVGKit svgKit;
 	Paint drawPaint = new Paint();
-    TPSVG svgImage;
+    SVG svgImage;
 
     ITPSVGAnim animHandler;
 
@@ -39,7 +37,7 @@ public class SVGView extends ImageView {
     protected void onFinishInflate() {
         super.onFinishInflate();
 
-        svgFactory = SVGFlyweightFactory.getInstance();
+        svgKit = SVGKit.getInstance();
 
         setDrawingCacheEnabled(false);
 
@@ -51,17 +49,22 @@ public class SVGView extends ImageView {
     @Override
 	protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec){
         int widthSize = MeasureSpec.getSize(widthMeasureSpec);
-		int heightSize = MeasureSpec.getSize(heightMeasureSpec);
-
-		int chosenDimension = Math.min(widthSize, heightSize);
-
-        Log.d(LOGTAG, "onMeasure: " + widthSize + ", " + heightSize);
+        int heightSize = MeasureSpec.getSize(heightMeasureSpec);
 
         if(svgImage != null){
-            Log.d(LOGTAG, "Document Size: " + svgImage.getDocumentWidth() + ", " + svgImage.getDocumentHeight());
+            int documentWidth = svgImage.getDocumentWidth();
+            int documentHeight = svgImage.getDocumentHeight();
+
+            float widthScale = (float)widthSize/(float)documentWidth;
+            float heightScale = (float)heightSize/(float)documentHeight;
+
+            float choosenScale = Math.min(widthScale, heightScale);
+
+            widthSize = (int)(widthSize * choosenScale / widthScale);
+            heightSize = (int)(heightSize * choosenScale / heightScale);
         }
-		
-		setMeasuredDimension(widthSize, heightSize);
+
+        setMeasuredDimension(widthSize, heightSize);
 	}
 
     @Override
@@ -71,14 +74,14 @@ public class SVGView extends ImageView {
 
 	public void setImageResource(int id, ITPSVGAnim animHandler){
         //TODO: Use Picture and PictureDrawable
-		svgImage = svgFactory.get(id, getContext(), animHandler);
+		svgImage = svgKit.get(id, getContext(), animHandler);
 		this.animHandler = animHandler;
 	}
 	
 	/**
 	 * Specify the particular subtree (or 'node') of the original SVG XML file that this view 
 	 * shall render. The default is null, which results in the entire SVG image being rendered.
-	 * @param nodeId
+	 * @param subtreeId
 	 */
 	public void setSubtree(String subtreeId){
 		subtree = subtreeId;
@@ -93,7 +96,8 @@ public class SVGView extends ImageView {
 		}
 	  		
 	    if(bm == null){
-	    	bm = Bitmap.createBitmap(getMeasuredWidth(), getMeasuredHeight(), Bitmap.Config.ARGB_4444);  // ARGB_8888
+            Log.d(SVGKit.LOGTAG, "onDraw Measures: " + getMeasuredWidth() + ", " + getMeasuredHeight());
+	    	bm = Bitmap.createBitmap(getMeasuredWidth(), getMeasuredHeight(), Bitmap.Config.ARGB_8888);  // ARGB_8888
 	    	svgImage.paintImage(new Canvas(bm), subtree, this, animHandler );
 		}
 

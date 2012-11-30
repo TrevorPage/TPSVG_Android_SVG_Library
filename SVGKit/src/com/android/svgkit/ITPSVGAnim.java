@@ -1,8 +1,8 @@
 package com.android.svgkit;
 
 
-import com.android.svgkit.TPSVG.SvgStyle;
-import com.android.svgkit.TPSVG.Textstring;
+import com.android.svgkit.SVG.SvgStyle;
+import com.android.svgkit.SVG.Textstring;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -40,7 +40,7 @@ public interface ITPSVGAnim {
 	 * @return
 	 */
 	
-	boolean animTextElement(String id, int iteration, Matrix matrix, TPSVG.SvgStyle style, TPSVG.Textstring text, float x, float y);
+	boolean animTextElement(String id, int iteration, Matrix matrix, SVG.SvgStyle style, SVG.Textstring text, float x, float y);
 	
 	boolean arcParams(String id, Path path, float startAngle, float sweepAngle, RectF bounds);
 	

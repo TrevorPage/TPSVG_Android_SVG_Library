@@ -36,7 +36,7 @@ import org.xml.sax.XMLReader;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
-public class TPSVG extends DefaultHandler {
+public class SVG extends DefaultHandler {
 	
 	private class Properties {
 		
@@ -379,11 +379,11 @@ public class TPSVG extends DefaultHandler {
 
 	
 	
-	public TPSVG(){
+	public SVG(){
 		
 	}
 	
-	public TPSVG(Context context, int resourceID, ITPSVGAnim animHandler){
+	public SVG(Context context, int resourceID, ITPSVGAnim animHandler){
 //		this.animHandler = animHandler;
 		parseImageFile(context,resourceID);
 	}
