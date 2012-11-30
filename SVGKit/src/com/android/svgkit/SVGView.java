@@ -1,16 +1,13 @@
 package com.android.svgkit;
 
-//import com.trevp.msDroid.SVGKit;
-
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.util.AttributeSet;
-import android.util.Log;
-import android.widget.ImageView;
+import android.view.View;
 
-public class SVGView extends ImageView {
+public class SVGView extends View {
     SVGKit svgKit;
 	Paint drawPaint = new Paint();
     SVG svgImage;
@@ -67,13 +64,11 @@ public class SVGView extends ImageView {
         setMeasuredDimension(widthSize, heightSize);
 	}
 
-    @Override
     public void setImageResource(int id){
         setImageResource(id, null);
     }
 
 	public void setImageResource(int id, ITPSVGAnim animHandler){
-        //TODO: Use Picture and PictureDrawable
 		svgImage = svgKit.get(id, getContext(), animHandler);
 		this.animHandler = animHandler;
 	}
@@ -96,7 +91,6 @@ public class SVGView extends ImageView {
 		}
 	  		
 	    if(bm == null){
-            Log.d(SVGKit.LOGTAG, "onDraw Measures: " + getMeasuredWidth() + ", " + getMeasuredHeight());
 	    	bm = Bitmap.createBitmap(getMeasuredWidth(), getMeasuredHeight(), Bitmap.Config.ARGB_8888);  // ARGB_8888
 	    	svgImage.paintImage(new Canvas(bm), subtree, this, animHandler );
 		}
