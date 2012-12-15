@@ -20,6 +20,7 @@ public class SVGView extends View  {
 	String subtree = null;
 	private int mRotation = 0;
 	Canvas mCanvas;
+	private boolean mFill = false;
 
 	// Tried using WeakReference<Bitmap> to avoid View-Bitmap memory leak issues, but this seems
 	// to lead to very frequent GC of the bitmaps, leading to terrible performance penalty. 
@@ -38,6 +39,14 @@ public class SVGView extends View  {
 	public SVGView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
 		init(context);
+	}
+	
+	public void setFill(boolean fill) {
+		mFill = fill;
+	}
+	
+	public boolean getFill() {
+		return mFill;
 	}
 
 	
@@ -142,7 +151,7 @@ public class SVGView extends View  {
 	    	}
 	    	*/
 	    	
-	    	mSvgImage.paintImage(c, subtree, this, mController );
+	    	mSvgImage.paintImage(c, subtree, this, mController, mFill );
 	    }
 	    
 		canvas.drawBitmap(mRenderBitmap, 0f, 0f, mDrawPaint );
