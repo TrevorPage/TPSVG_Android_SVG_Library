@@ -1898,8 +1898,13 @@ private void parseAttributes(Attributes attributes){
 	
 	// ------------------------------------------------------------------------------
 	// Code Evaluator
+	
+	public void paintImage( Canvas canvas, String groupNodeId, View view, ITpsvgController animHandler ) {
+		paintImage(canvas, groupNodeId, view, animHandler, false);
+	}
 
-	public void paintImage( Canvas canvas, String groupNodeId, View view, ITpsvgController animHandler ){
+
+	public void paintImage( Canvas canvas, String groupNodeId, View view, ITpsvgController animHandler, boolean fill ){
 
 		//animHandler = animHandler;
 		Canvas mCanvas = canvas;
@@ -1909,7 +1914,11 @@ private void parseAttributes(Attributes attributes){
 
 		//setCanvasScaleToSVG(mCanvas, view);
 
-		float uniformScaleFactor = Math.min(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
+		float uniformScaleFactor;
+		if (fill)
+			uniformScaleFactor = Math.max(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
+		else
+			uniformScaleFactor = Math.min(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
 		canvas.scale(uniformScaleFactor, uniformScaleFactor);
 		float excessY = (view.getHeight() / mRootSvgHeight) - uniformScaleFactor;
 		float excessX = view.getWidth() - (uniformScaleFactor * mRootSvgWidth);
