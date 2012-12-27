@@ -1,5 +1,3 @@
-
-
 package com.trevorpage.tpsvg;
 
 import java.io.File;
@@ -29,7 +27,6 @@ import android.graphics.Typeface;
 import android.util.Log;
 import android.view.View;
 
-// SAX Library
 import org.xml.sax.helpers.AttributesImpl;
 import org.xml.sax.helpers.DefaultHandler;
 import org.xml.sax.Attributes;
@@ -37,16 +34,17 @@ import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
 
-
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
+
+import com.trevorpage.tpsvg.internal.PatternFill;
 
 public class SVGParserRenderer extends DefaultHandler {
 	
 	private static final String LOGTAG = "SVGParserRenderer";
 	private static final String ASSETS_FONTS_ROOT_DIRECTORY = "fonts";
 	
-	/* Bytecode instruction set */
+	// Bytecode instruction set
 	private static final byte INST_END 			= 0;
 	private static final byte INST_PATH			= 1;
 	private static final byte INST_MATRIX 		= 2;
@@ -56,8 +54,10 @@ public class SVGParserRenderer extends DefaultHandler {
 	private static final byte INST_TEXTSTRING	= 6;
 	private static final byte INST_IDSTRING		= 7;
 	private static final byte INST_ARC			= 8;
+	private static final byte INST_BEGIN_PATTERN = 9;
+	private static final byte INST_END_PATTERN = 10;
 	
-	/* XML tags */
+	// XML tags
 	private static final String STARTTAG_SVG	= "svg";
 	private static final String STARTTAG_G		= "g";
 	private static final String STARTTAG_PATH	= "path";
@@ -72,6 +72,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	private static final String STARTTAG_LINEARGRADIENT = "linearGradient";
 	private static final String STARTTAG_STOP	= "stop";
 	private static final String STARTTAG_DEFS 	= "defs";
+	private static final String STARTTAG_PATTERN = "pattern";
 	
 	private static final String SPECIAL_ID_PREFIX_ANIM = "_anim";
 	private static final String SPECIAL_ID_PREFIX_META = "_meta";
@@ -96,6 +97,7 @@ public class SVGParserRenderer extends DefaultHandler {
 		stroke_width,	
 		text_align,
 		points,
+		viewBox,
 		novalue;
 		
 	    public static Attr toAttr(String str) {
@@ -132,7 +134,6 @@ public class SVGParserRenderer extends DefaultHandler {
 	private byte[] bytecodeArr; 		// Holds the complete bytecode for an SVG image once parsed. 
 	private Stack<Matrix> matrixEvStack = new Stack<Matrix>(); // Used for chaining transformations on nested nodes. 
 	private boolean[] matrixExistsAtDepth = new boolean [20];
-	//private Typeface ttfFont1;
 	private Stack<SvgStyle> mStyleParseStack = new Stack<SvgStyle>();
 	
 	private Context mContext;
@@ -140,6 +141,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	private HashMap<String, String> mPrivateDataMap;
 	private String mPrivateDataCurrentKey;
 	
+	private HashMap<String, PatternFill> mPatternMap = new HashMap<String, PatternFill>();
 	
 	public SVGParserRenderer() {
 		mPrivateDataMap = new HashMap<String, String>();
@@ -159,31 +161,6 @@ public class SVGParserRenderer extends DefaultHandler {
 		mPrivateDataMap = new HashMap<String, String>();
 		parseImageFile(context, sourceStream);
 	}
-
-	// TODO:
-	// Possibly use sequence like
-	// new SVGParserRenderer(...).setApplicationNamespace(...).render();
-	
-	/*
-	public SVGParserRenderer(Context context, int resourceID, Map<String, String> metaDataQueryMap) {
-		//mMetaDataQueryMap = new HashMap<String, String>();
-		mMetaDataQueryMap = metaDataQueryMap;
-		parseImageFile(context, resourceID);
-	}
-
-	public SVGParserRenderer(Context context, File sourceFile, Map<String, String> metaDataQueryMap) throws FileNotFoundException {
-		//mMetaDataQueryMap = new HashMap<String, String>();
-		mMetaDataQueryMap = metaDataQueryMap;
-		parseImageFile(context, sourceFile);
-	}
-
-	public SVGParserRenderer(Context context, InputStream sourceStream, Map<String, String> metaDataQueryMap) {
-		//mMetaDataQueryMap = new HashMap<String, String>();
-		mMetaDataQueryMap = metaDataQueryMap;
-		parseImageFile(context, sourceStream);
-	}
-	*/
-
 	
 	public void setPrivateDataNamespace(String namespace) {
 		mPrivateDataNamespace = namespace;
@@ -228,21 +205,11 @@ public class SVGParserRenderer extends DefaultHandler {
 		this.arcsList.clear();
 		
 		bytecodeList = new ArrayList<Byte>();
-//		mMetaDataQueryMap.clear();
-		
-		// Initialise the style stack with a first entry containing all of the default values. 
 
 		SvgStyle s = new SvgStyle();
 
 		mStyleParseStack.add(s);
-		
 
-		
-		// TODO: Possibly stuff for constructor
-		//InputStream inStream = null;
-		//Resources res = context.getResources();			
-
-		//inStream = res.openRawResource(/*R.raw.gaugetest20*/ resourceID);
 		SAXParserFactory spf = SAXParserFactory.newInstance();
 		try{
 			SAXParser sp = spf.newSAXParser();
@@ -250,52 +217,53 @@ public class SVGParserRenderer extends DefaultHandler {
 			xr.setContentHandler(this);	
 			xr.parse(new InputSource(inStream));
 		}
-		catch(Exception e){
-			
-		}
+		catch(Exception e){ }
 		
-		addInstruction(INST_END); // could also go in endDocument if it exists.
+		addInstruction(INST_END); 
+		
 		bytecodeArr = new byte[bytecodeList.size()];
 		for (int i = 0; i < bytecodeList.size(); i++) {
 			bytecodeArr[i] = bytecodeList.get(i);
 		}
-
+    	
+		for (SvgStyle style:styleList) {
+			if (style.mFillPattern != null) {
+				if (style.mFillPattern.getXLinkReferenceId() != null) {
+					style.mFillPattern.setXLinkReferencePatternFill(mPatternMap.get(style.mFillPattern.getXLinkReferenceId()));
+				}
+				style.fillPaint.setShader(style.mFillPattern.createPatternShader(this));
+				style.mFillPattern = null; 
+			}
+		}
+		
 		mContext = null;
-	}
-	
-	
+	}		
 
     @Override
     public void characters(char[] ch, int start, int length) throws SAXException {
         super.characters(ch, start, length);
-        
+
         if (mCurrentElement.equalsIgnoreCase(STARTTAG_TEXT)) {
         	text_characters(ch, start, length);
         }
-        
         else if (mCurrentElement.equalsIgnoreCase(STARTTAG_TSPAN)) {
         	tspan_characters(ch, start, length);
         }
-        
         else if (mPrivateDataCurrentKey != null) {
         	mPrivateDataMap.put(mPrivateDataCurrentKey, new String(ch, start, length));
         }
-        
-    }
-    
+    }   
     
     @Override
-    public void endElement(String uri, String localName, String name)
-            throws SAXException {
+    public void endElement(String uri, String localName, String name) throws SAXException {
         super.endElement(uri, localName, name);
         
         mPrivateDataCurrentKey = "";
         mCurrentElement = "";
-        
+                
         if (localName.equalsIgnoreCase(STARTTAG_G)){
         	addEndGroup();
-        }
-        
+        }       
         else if (localName.equalsIgnoreCase(STARTTAG_LINEARGRADIENT)){
         	finaliseLinearGradient();
         }
@@ -303,33 +271,40 @@ public class SVGParserRenderer extends DefaultHandler {
         	finaliseRadialGradient();
         }
         else if (localName.equalsIgnoreCase(STARTTAG_DEFS)){
-    		completeHrefs();
+        	completeXLinks();
         }
-        
+        else if (localName.equalsIgnoreCase(STARTTAG_PATTERN)) {
+        	endPattern();
+        }
+
         tagDepth--;       
+        
         if(matrixExistsAtDepth[tagDepth]){
         	this.matrixEvStack.pop();
         }
         
-
         mStyleParseStack.pop();
     }
     
-
     @Override
     public void startDocument() throws SAXException {
         super.startDocument();
     }
+    
+    @Override
+    public void endDocument() throws SAXException {
+    	super.endDocument();
+    }
 
     /**
-     * Requires optimisation - lots of if / else that could be removed. 
+     *  
      */
     @Override
     public void startElement(String uri, String localName, String qName,
             Attributes attributes) throws SAXException {
     	
         super.startElement(uri, localName, qName, attributes);
-        
+
         matrixExistsAtDepth[tagDepth] = false;
         mCurrentElement = localName;       
         mProperties.svgStyle = new SvgStyle(mStyleParseStack.peek());
@@ -340,7 +315,7 @@ public class SVGParserRenderer extends DefaultHandler {
         else {
         	mPrivateDataCurrentKey = null;
         }
-        
+
         if(localName.equalsIgnoreCase(STARTTAG_SVG)) {
         	parseAttributes(attributes);
         	svg();
@@ -389,14 +364,18 @@ public class SVGParserRenderer extends DefaultHandler {
         	parseAttributes(attributes);
         	gradientStop();
         }        
-        
+        else if (localName.equalsIgnoreCase(STARTTAG_PATTERN)) {
+        	parseAttributes(attributes);
+        	startPattern();
+        }	
+
         mStyleParseStack.add(mProperties.svgStyle);
         tagDepth++;
     }
     
         
     
-private void parseAttributes(Attributes attributes){
+    private void parseAttributes(Attributes attributes){
     	
     	String v;
     	
@@ -404,9 +383,9 @@ private void parseAttributes(Attributes attributes){
     	mProperties.styleData = null;
     	mProperties.id = "";
     		
-    	AttributesImpl attrImpl = new AttributesImpl(attributes);    	// quicker to cast?
+    	AttributesImpl attrImpl = new AttributesImpl(attributes);    
 
-		SvgStyle s = mProperties.svgStyle; //styleParseStack.peek(); // new Style();
+		SvgStyle s = mProperties.svgStyle; 
 
 		// Opacity: Not sure if the 'opacity' attribute (as opposed to fill-opacity or stroke-opacity
 		// attributes) is supposed to inherit, so for now reset it to 1 each time. Remove this later
@@ -414,7 +393,6 @@ private void parseAttributes(Attributes attributes){
 		s.masterOpacity = 1;
 		s.fillOpacity = 1;
 		s.strokeOpacity=1;
-		
 		
 		// During execution of the loop, the length of attrImpl will expand if a <style> attribute
 		// exists. A <style> tag's value itself contains a list of semicolon-separated key/value pairs.
@@ -515,20 +493,28 @@ private void parseAttributes(Attributes attributes){
 		        	break;
 	        
 		        case fill:
-					if( !v.equals("none")){
-						if(v.startsWith("url")){
+					if (!v.equals("none")) {
+						if (v.startsWith("url")) {
 							// Assume the form fill:url(#[ID_STRING]) 
-							int gradientIdx = this.getGradientByIdString(v.substring(5,v.length()-1));
+							String idString = v.substring(5, v.length() - 1);
+							int gradientIdx = this.getGradientByIdString(idString);
 							// TODO: This is giving the Paint a *reference* to one of the Shader objects
 							// in the gradientList. This is possibly okay, but because we need to 
 							// apply the current Path's Matrix as the gradient's local Matrix during
 							// rendering, we have to be careful not to permanently modify the shader,
 							// as otherwise any changes (Matrix transformation etc) will affect
 							// subsequent uses of that Shader. 
-							s.fillPaint.setShader(gradientList.get(gradientIdx).shader);
+							
+							if (gradientIdx != -1) {
+								s.fillPaint.setShader(gradientList.get(gradientIdx).shader);
+							}
+							else if (mPatternMap.containsKey(idString)) {
+								//s.fillPaint.setShader(mPatternList.get(idString).getShader());
+								s.mFillPattern = mPatternMap.get(idString);
+							}							
 						}
 						
-						else{
+						else {
 							// Set the colour, while preserving the alpha (in case alpha is to be inherited rather
 							// than being explicity set in the element's own style attributes) 
 							int alpha = s.fillPaint.getAlpha();
@@ -610,13 +596,14 @@ private void parseAttributes(Attributes attributes){
 		        	s.fillPaint.setTextAlign(align);
 		        	break;
 					
+		        case viewBox:
+		        	mProperties.viewBox = v;
+		        	break;
+		        	
 				default:
 					break;
-    	
     		}
     	}
-    	
-    	//mProperties.style = s;
     }
  
     
@@ -651,7 +638,7 @@ private void parseAttributes(Attributes attributes){
     	// Best way to deal with xlink might be to do an entire copy of the referenced
     	// Gradient first, and then apply over the top any properties that are 
     	// explicitly defined for this Gradient. 
-    	if(mProperties.xlink_href!=null){
+    	if (mProperties.xlink_href != null) {
     		
     		// The hrefs have to be dealt with in a second pass, because forward references are possible!
     		
@@ -721,11 +708,67 @@ private void parseAttributes(Attributes attributes){
         	currentGradient.matrix = transform();
     	//}
     	
-    	
     	g.id = mProperties.id;
-    	
     }
     
+	/**
+	 * Start processing a &lt;pattern&gt; element. 
+	 * Current limitations and restrictions of pattern support are:
+	 * 1. The patternUnits attribute isn't used, and tiles are spaced as if it were
+	 * patternUnits="userSpaceOnUse". 
+	 * 2. A viewBox attribute must be provided to specify the bounds of the pattern tile.
+	 * 3. Quite a lot more - this is work in progress.
+	 */
+	private void startPattern() {
+		addBeginPattern(mProperties.id);
+		
+		PatternFill patternFill = new PatternFill();
+		
+		if (mProperties.xlink_href != null) {
+			// Assume the form xlink:href="#some_id_string"
+			patternFill.setXLinkReferenceId(mProperties.xlink_href.replace("#", ""));
+		}
+		else {			
+			patternFill.setPatternSubtree(mProperties.id);
+			
+			PathTokenizer t = new PathTokenizer();
+			float x, y, width, height;
+			t.getToken(mProperties.viewBox);
+			x = t.tokenF;
+			t.getToken(null);
+			y = t.tokenF;
+			t.getToken(null);
+			width = t.tokenF;
+			t.getToken(null);
+			height = t.tokenF;
+			t.getToken(null);		
+			
+			if (width > 0 && height > 0) {			
+				patternFill.setPatternViewBox(x, y, width, height);				
+			}
+			else {
+				String id = mProperties.id != null ? mProperties.id : "(no ID specified)";
+				Log.w(LOGTAG, "Pattern element " + id + " doesn't have viewBox attribute, or has zero viewBox width or height");
+			}	
+		}
+		mPatternMap.put(mProperties.id, patternFill);	
+	}
+
+	/**
+	 * 
+	 */
+	private void endPattern() {
+		addEndPattern();
+	}
+	
+	/**
+	 * Returns whether any vector data was parsed from the specified SVG file or
+	 * file subtree. 
+	 * @return
+	 */
+	public boolean hasVectorContent() {
+		return (pathList.size() > 0 || arcsList.size() > 0);
+	}
 
     /**
      * Is called when all of the SVG XML file has been parsed. It performs cross-referencing and
@@ -744,7 +787,7 @@ private void parseAttributes(Attributes attributes){
      * Also, xrefs between gradients could be at a greater depth than 1, which means that we'd need
      * to do multiple passes over the list. 
      */
-    private void completeHrefs(){
+    private void completeXLinks(){
     	// Process the gradients
     	Iterator<Gradient>gi = gradientList.iterator();
     	Gradient g; 
@@ -799,15 +842,9 @@ private void parseAttributes(Attributes attributes){
 		    	}        			
 		    	else{
 		    		g.shader.setLocalMatrix(new Matrix());
-		    	}
-				
+		    	}	
     		}
-				
-
-
-    	}
-    	
-    	
+    	}    	
     }
     
     
@@ -1199,9 +1236,6 @@ private void parseAttributes(Attributes attributes){
 		p.close();
 		addPath(p);
 	}
-
-		
-	
 	
 	private Matrix transform(){
 		
@@ -1809,18 +1843,34 @@ private void parseAttributes(Attributes attributes){
 		addTransform();
 		addInstruction(INST_BEGINGROUP);
 		// Did the attributes for this <g> element include an id= attribute?
-		if(id!=""){
-
+		if (!id.equals("")) {
 			subtreeJumpMap.put(id, new GroupJumpTo(	bytecodeList.size()-2, pathList.size(),
 													matrixList.size()-1, styleList.size(),
 													textstringList.size(), idstringList.size(),
 													arcsList.size() ));
-
 		}
 	}
 	
 	private void addEndGroup(){
 		addInstruction(INST_ENDGROUP);
+	}
+	
+	private void addBeginPattern(String id) {
+		addIdIfContainsSpecialPrefix();
+		// All groups need to have Matrix added before them, even if empty Matrix
+		addTransform();
+		addInstruction(INST_BEGIN_PATTERN);
+		// Did the attributes for this <g> element include an id= attribute?
+		if (id != null && !id.equals("")) {
+			subtreeJumpMap.put(id, new GroupJumpTo(	bytecodeList.size() - 2, pathList.size(),
+													matrixList.size() - 1, styleList.size(),
+													textstringList.size(), idstringList.size(),
+													arcsList.size() ));
+		}
+	}
+	
+	private void addEndPattern() {
+		addInstruction(INST_END_PATTERN);
 	}
 	
 	private void addTransform(){
@@ -1899,29 +1949,47 @@ private void parseAttributes(Attributes attributes){
 	// ------------------------------------------------------------------------------
 	// Code Evaluator
 	
-	public void paintImage( Canvas canvas, String groupNodeId, View view, ITpsvgController animHandler ) {
-		paintImage(canvas, groupNodeId, view, animHandler, false);
+	public void paintImage(Canvas canvas, String subtreeId, View view, ITpsvgController animHandler ) {
+		paintImage(canvas, subtreeId, view, animHandler, false);
 	}
 
-
-	public void paintImage( Canvas canvas, String groupNodeId, View view, ITpsvgController animHandler, boolean fill ){
-
-		//animHandler = animHandler;
-		Canvas mCanvas = canvas;
-		Path workingPath = new Path();
-		Path carryPath = new Path();
-		int gDepth = 1;
-
-		//setCanvasScaleToSVG(mCanvas, view);
-
+	public void paintImage(Canvas canvas, String subtreeId, View view, ITpsvgController animHandler, boolean fill) {
 		float uniformScaleFactor;
 		if (fill)
 			uniformScaleFactor = Math.max(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
 		else
 			uniformScaleFactor = Math.min(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
-		canvas.scale(uniformScaleFactor, uniformScaleFactor);
 		float excessY = (view.getHeight() / mRootSvgHeight) - uniformScaleFactor;
 		float excessX = view.getWidth() - (uniformScaleFactor * mRootSvgWidth);
+		paintImage(canvas, subtreeId, uniformScaleFactor, uniformScaleFactor, excessX, excessY, animHandler, fill, false);	
+	}
+		
+	/**
+	 * 
+	 * @param canvas The canvas on which to make the drawing calls. 
+	 * @param subtreeId ID of a subtree in the SVG image to render. The ID needs to be the ID
+	 * of a &lt;g&gt; group element. Pass null to render entire image. 
+	 * @param scaleX
+	 * @param scaleY
+	 * @param excessWidth
+	 * @param excessHeight
+	 * @param animHandler Animation callback handler
+	 * @param fill
+	 * @param isDrawingPatternTile Normally should be false. Set to true if the call is being
+	 * made specifically for drawing a single pattern tile, usually during the creation of an
+	 * SVGPatternShader. In this case the subtreeId would be the ID of the &lt;pattern&gt; element.
+	 * The result is that the vector data inside the &lt;pattern&gt; element is drawn to Canvas
+	 * as if it were regular image data. 
+	 */
+	void paintImage(Canvas canvas, String subtreeId, float scaleX, float scaleY, float excessWidth, float excessHeight,
+			ITpsvgController animHandler, boolean fill, boolean isDrawingPatternTile) {		
+
+		Canvas mCanvas = canvas;
+		canvas.scale(scaleX, scaleY);
+		Path workingPath = new Path();
+		Path carryPath = new Path();
+		int gDepth = 1;
+		boolean mSkipPattern = false;
 
 		codePtr = 0; 
 		// TBD: I think that previous Matrix is remaining attached to something, so have to instance
@@ -1940,12 +2008,12 @@ private void parseAttributes(Attributes attributes){
 		Matrix animMatrix = new Matrix();
 		Matrix shaderMatrix = new Matrix();
 		
-		if (groupNodeId != null) {
+		if (subtreeId != null) {
 			// TODO: It would be better if the GroupJumpTo object did all of this for us, or 
 			// even better if all the data structures were somehow grouped together into a parent
 			// class and this was one of its methods. 
-			if (subtreeJumpMap.containsKey(groupNodeId)) {
-				GroupJumpTo jumpTo=subtreeJumpMap.get(groupNodeId);
+			if (subtreeJumpMap.containsKey(subtreeId)) {
+				GroupJumpTo jumpTo=subtreeJumpMap.get(subtreeId);
 				codePtr = jumpTo.bytecodePosition;//-1;
 				matrixListIterator = matrixList.listIterator(jumpTo.matrixListPosition );
 				pathListIterator = pathList.listIterator(jumpTo.pathListPosition );
@@ -1967,8 +2035,8 @@ private void parseAttributes(Attributes attributes){
 			return;
 		}
 		
-		while( bytecodeArr[codePtr] != INST_END && gDepth > 0 ){
-				
+		while (bytecodeArr[codePtr] != INST_END && gDepth > 0) {
+							
 			switch(bytecodeArr[codePtr]) {
 			
 			case INST_PATH:				
@@ -2000,7 +2068,7 @@ private void parseAttributes(Attributes attributes){
 							
 							// test - for 9-patch anchor idea
 							if (animId.equals("_animanchorright")) {
-								animMatrix.postTranslate(excessX, 0);
+								animMatrix.postTranslate(excessWidth, 0);
 							}
 							
 							
@@ -2025,8 +2093,9 @@ private void parseAttributes(Attributes attributes){
 							copyShaderMatrix.postConcat(workingMatrix );
 							currentFillPaint.getShader().setLocalMatrix(copyShaderMatrix);
 						}
-	
-						mCanvas.drawPath(workingPath, currentFillPaint);
+						if (!mSkipPattern) {
+							mCanvas.drawPath(workingPath, currentFillPaint);
+						}
 						if(shaderMatrix != null){
 							currentFillPaint.getShader().setLocalMatrix(shaderMatrix); // Restore shader's original Matrix 
 						}
@@ -2057,7 +2126,9 @@ private void parseAttributes(Attributes attributes){
 							currentStrokePaint.getShader().setLocalMatrix(copyShaderMatrix);
 						}
 						
-						mCanvas.drawPath(workingPath, currentStrokePaint);
+						if (!mSkipPattern) {
+							mCanvas.drawPath(workingPath, currentStrokePaint);	
+						}
 						currentStrokePaint.setStrokeWidth(storedStrokeWidth);			
 					}
 									
@@ -2079,13 +2150,30 @@ private void parseAttributes(Attributes attributes){
 							
 			case INST_ENDGROUP:
 				gDepth--;
-				if(gDepth == 1 && groupNodeId != null){
+				if (gDepth == 1 && subtreeId != null) {
 					// The loop will now terminate and finish rendering, because the specified SVG
 					// image fragment has been drawn. 
 					gDepth = 0;
 				}
 				break;
+					
+			case INST_BEGIN_PATTERN:
+				if (!isDrawingPatternTile) {
+					mSkipPattern = true;	
+				}
+				gDepth++;
+				break;
 				
+			case INST_END_PATTERN:
+				mSkipPattern = false;
+				gDepth--;
+				if (isDrawingPatternTile && gDepth == 1 && subtreeId != null) {
+					// The loop will now terminate and finish rendering, because the specified SVG
+					// image fragment has been drawn. 
+					gDepth = 0;
+				}
+				break;
+			
 				
 			case INST_STYLE:
 				SvgStyle currentStyle = styleListIterator.next();
@@ -2141,12 +2229,12 @@ private void parseAttributes(Attributes attributes){
 					mCanvas.concat(animMatrix);
 					mCanvas.concat(workingMatrix);
 
-					if(currentStrokePaint!=null){
+					if (currentStrokePaint != null && !mSkipPattern) {
 
 						mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x, ts.y, currentStrokePaint);
 		//				mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x + matrixValues[Matrix.MTRANS_X], ts.y + matrixValues[Matrix.MTRANS_Y], currentStrokePaint);
 					}
-					if(currentFillPaint!=null){
+					if (currentFillPaint != null && !mSkipPattern){
 
 						mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x, ts.y, currentFillPaint);
 		//				mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x + matrixValues[Matrix.MTRANS_X], ts.y + matrixValues[Matrix.MTRANS_Y], currentFillPaint);
@@ -2196,7 +2284,12 @@ private void parseAttributes(Attributes attributes){
 		boolean hasFill;
 		boolean hasStroke;
 		
-		public float masterOpacity, fillOpacity, strokeOpacity;
+		public float masterOpacity; 
+		public float fillOpacity; 
+		public float strokeOpacity;
+		
+		PatternFill mFillPattern;
+		PatternFill mStrokePattern;
 		
 		/**
 		 * Create a new SvgStyle object with all the default initial values applied in accordance with SVG
@@ -2205,8 +2298,7 @@ private void parseAttributes(Attributes attributes){
 		 * http://www.w3.org/TR/SVG/painting.html
 		 * TODO: Still need to ensure that all properties are to the correct initial values. 
 		 */
-		public SvgStyle(){
-		
+		public SvgStyle() {
 			fillPaint = new Paint();
 			strokePaint = new Paint();
 			fillPaint.setStyle(Paint.Style.FILL);
@@ -2243,8 +2335,7 @@ private void parseAttributes(Attributes attributes){
 		 * to an explicit value. 
 		 * @param s
 		 */
-		public SvgStyle(SvgStyle s){
-			
+		public SvgStyle(SvgStyle s) {
 			this.fillPaint = new Paint(s.fillPaint);
 			this.strokePaint = new Paint(s.fillPaint);
 			this.fillPaint.setStyle(Paint.Style.FILL);
@@ -2267,13 +2358,9 @@ private void parseAttributes(Attributes attributes){
 			this.fillPaint.setTypeface(Typeface.DEFAULT);
 			this.strokePaint.setTypeface(Typeface.DEFAULT);		
 			this.hasFill = s.hasFill;
-			this.hasStroke = s.hasStroke;
-			
-			
+			this.hasStroke = s.hasStroke;	
 		}
-	
 	}
-	
 	
 	/**
 	 * Class that stores the current positions in all of the list structures when parsing begins
@@ -2348,7 +2435,6 @@ private void parseAttributes(Attributes attributes){
 	/**
 	 * Represents a single line of text. Encapsulates data parsed from the SVG file needed
 	 * to render the text to Canvas. 
-	 * @author trev
 	 *
 	 */
 	public class Textstring{
@@ -2410,8 +2496,9 @@ private void parseAttributes(Attributes attributes){
 
 		String id;
 		String xlink_href;
+		
+		String viewBox;
 	}
-
 }
 
 
