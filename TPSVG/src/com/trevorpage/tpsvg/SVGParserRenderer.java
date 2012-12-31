@@ -37,12 +37,17 @@ import org.xml.sax.XMLReader;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
+import com.trevorpage.tpsvg.internal.ParsedAttributes;
 import com.trevorpage.tpsvg.internal.PatternFill;
+import com.trevorpage.tpsvg.internal.SVGPath;
 
 public class SVGParserRenderer extends DefaultHandler {
 	
 	private static final String LOGTAG = "SVGParserRenderer";
 	private static final String ASSETS_FONTS_ROOT_DIRECTORY = "fonts";
+	
+	private static final String CUSTOM_ATTRIBUTE_NAMESPACE = "tpsvg:";
+	private String mPrivateDataNamespace = "msdroid:";
 	
 	// Bytecode instruction set
 	private static final byte INST_END 			= 0;
@@ -67,7 +72,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	private static final String STARTTAG_CIRCLE	= "circle";
 	private static final String STARTTAG_TEXT	= "text";
 	private static final String STARTTAG_TSPAN  = "tspan";
-	private static final String STARTTAG_TEXTPATH	= "textPath";
+	//private static final String STARTTAG_TEXTPATH	= "textPath";
 	private static final String STARTTAG_RADIALGRADIENT	= "radialGradient";
 	private static final String STARTTAG_LINEARGRADIENT = "linearGradient";
 	private static final String STARTTAG_STOP	= "stop";
@@ -75,10 +80,11 @@ public class SVGParserRenderer extends DefaultHandler {
 	private static final String STARTTAG_PATTERN = "pattern";
 	
 	private static final String SPECIAL_ID_PREFIX_ANIM = "_anim";
-	private static final String SPECIAL_ID_PREFIX_META = "_meta";
-	private static final String SPECIAL_ID_PREFIX_ARCPARAMS = "_arcparams";
+	//private static final String SPECIAL_ID_PREFIX_META = "_meta";
+	//private static final String SPECIAL_ID_PREFIX_ARCPARAMS = "_arcparams";
 		
-	private enum Attr {
+	/** Supported standard SVG attributes */
+	private enum StandardAttributes {
 		x, y, x1, y1, x2, y2, cx, cy, fx, fy, r,
 		height, width,
 		d,
@@ -100,7 +106,7 @@ public class SVGParserRenderer extends DefaultHandler {
 		viewBox,
 		novalue;
 		
-	    public static Attr toAttr(String str) {
+	    public static StandardAttributes toAttr(String str) {
 	        try {
 	            return valueOf(str.replace('-', '_'));
 	        } 
@@ -110,7 +116,25 @@ public class SVGParserRenderer extends DefaultHandler {
 	    } 	
 	}
 	
-	private Properties mProperties;
+	/** Custom attributes that are special to this SVG library. Some elements can use 
+	 * these to access special functionality that this library provides. When used they
+	 * are prefixed with CUSTOM_ATTRIBUTE_NAMESPACE */
+	private enum CustomAttributes {
+		anchor,
+		stretch_to_excess,
+		novalue;
+		
+	    public static CustomAttributes toAttr(String str) {
+	        try {
+	            return valueOf(str.replace('-', '_'));
+	        } 
+	        catch (Exception e) {
+	            return novalue;
+	        }
+	    } 			
+	}
+	
+	private ParsedAttributes mParsedAttributes;
 	private float mRootSvgHeight = 100;
 	private float mRootSvgWidth = 100;
 
@@ -136,8 +160,12 @@ public class SVGParserRenderer extends DefaultHandler {
 	private boolean[] matrixExistsAtDepth = new boolean [20];
 	private Stack<SvgStyle> mStyleParseStack = new Stack<SvgStyle>();
 	
+	private float mCurrentX;
+	private float mCurrentY;
+	private float mLastControlPointX = 0;
+	private float mLastControlPointY = 0;
+	
 	private Context mContext;
-	private String mPrivateDataNamespace = "msdroid:";
 	private HashMap<String, String> mPrivateDataMap;
 	private String mPrivateDataCurrentKey;
 	
@@ -175,7 +203,6 @@ public class SVGParserRenderer extends DefaultHandler {
 	    while (it.hasNext()) {
 	        Map.Entry<String, String> pairs = (Map.Entry<String, String>)it.next();
 	        controller.onSVGPrivateData(pairs.getKey(), pairs.getValue());
-	        //it.remove(); // avoids a ConcurrentModificationException
 	    }
 	}
 	
@@ -194,7 +221,7 @@ public class SVGParserRenderer extends DefaultHandler {
 		mContext = context;
 		tagDepth = 0;
 		codePtr = 0;
-		mProperties = new Properties();
+		mParsedAttributes = new ParsedAttributes();
 
 		this.gradientList.clear();
 		this.matrixList.clear();
@@ -307,7 +334,7 @@ public class SVGParserRenderer extends DefaultHandler {
 
         matrixExistsAtDepth[tagDepth] = false;
         mCurrentElement = localName;       
-        mProperties.svgStyle = new SvgStyle(mStyleParseStack.peek());
+        mParsedAttributes.svgStyle = new SvgStyle(mStyleParseStack.peek());
         
         if (mPrivateDataNamespace != null && qName.startsWith(mPrivateDataNamespace)) {
         	mPrivateDataCurrentKey = localName;
@@ -322,7 +349,7 @@ public class SVGParserRenderer extends DefaultHandler {
         }
         else if (localName.equalsIgnoreCase(STARTTAG_G)){
         	parseAttributes(attributes);
-        	addBeginGroup(mProperties.id);
+        	addBeginGroup(mParsedAttributes.id);
         }
         else if (localName.equalsIgnoreCase(STARTTAG_PATH)) {
         	parseAttributes(attributes);
@@ -369,30 +396,28 @@ public class SVGParserRenderer extends DefaultHandler {
         	startPattern();
         }	
 
-        mStyleParseStack.add(mProperties.svgStyle);
+        mStyleParseStack.add(mParsedAttributes.svgStyle);
         tagDepth++;
     }
-    
         
-    
-    private void parseAttributes(Attributes attributes){
-    	
-    	String v;
-    	
-    	mProperties.transformData = null;
-    	mProperties.styleData = null;
-    	mProperties.id = "";
-    		
+    private void parseAttributes(Attributes attributes) {
+    			
     	AttributesImpl attrImpl = new AttributesImpl(attributes);    
 
-		SvgStyle s = mProperties.svgStyle; 
-
-		// Opacity: Not sure if the 'opacity' attribute (as opposed to fill-opacity or stroke-opacity
+    	// Reset attributes that don't inherit. 
+    	mParsedAttributes.transformData = null;
+    	mParsedAttributes.styleData = null;
+    	mParsedAttributes.id = "";
+       	mParsedAttributes.anchorRight = false;
+       	mParsedAttributes.anchorBottom = false;
+       	mParsedAttributes.stretchToExcessWidth = false;
+       	mParsedAttributes.stretchToExcessHeight = false;
+		// Not sure if the 'opacity' attribute (as opposed to fill-opacity or stroke-opacity
 		// attributes) is supposed to inherit, so for now reset it to 1 each time. Remove this later
 		// if it needs to inherit. Also, fill-opacity and stroke-opacity do inherit for time being. 
-		s.masterOpacity = 1;
-		s.fillOpacity = 1;
-		s.strokeOpacity=1;
+    	mParsedAttributes.svgStyle.masterOpacity = 1;
+    	mParsedAttributes.svgStyle.fillOpacity = 1;
+    	mParsedAttributes.svgStyle.strokeOpacity=1;
 		
 		// During execution of the loop, the length of attrImpl will expand if a <style> attribute
 		// exists. A <style> tag's value itself contains a list of semicolon-separated key/value pairs.
@@ -404,99 +429,95 @@ public class SVGParserRenderer extends DefaultHandler {
 
     	for (int n = 0; n < attrImpl.getLength(); n++) {
     	
-    		v = attrImpl.getValue(n).trim(); // Value could contain prefix/suffix spaces; remove them. 
-    		switch (Attr.toAttr(attrImpl.getLocalName(n))) {
+    		String value = attrImpl.getValue(n).trim(); // Value could contain prefix/suffix spaces; remove them. 
+    		switch (StandardAttributes.toAttr(attrImpl.getLocalName(n))) {
     	  	
     			case x:
-		    		mProperties.x = parseCoOrdinate(v); 
+		    		mParsedAttributes.x = parseCoOrdinate(value); 
 		    		break;
 
     			case y:
-		    		mProperties.y = parseCoOrdinate(v);    		
+		    		mParsedAttributes.y = parseCoOrdinate(value);    		
 		    		break;  	
 
     			case x1:
-		    		mProperties.x1 = parseCoOrdinate(v);
+		    		mParsedAttributes.x1 = parseCoOrdinate(value);
 		    		break;
     		
     			case y1:
-    				mProperties.y1 = parseCoOrdinate(v);    		
+    				mParsedAttributes.y1 = parseCoOrdinate(value);    		
     				break;
     	
     			case x2:
-    				mProperties.x2 = parseCoOrdinate(v);
+    				mParsedAttributes.x2 = parseCoOrdinate(value);
     				break;
     		
     			case y2:
-    				mProperties.y2 = parseCoOrdinate(v);    		      	
+    				mParsedAttributes.y2 = parseCoOrdinate(value);    		      	
     				break;
     	   		
     			case cx:
-    				mProperties.cx = parseCoOrdinate(v);
+    				mParsedAttributes.cx = parseCoOrdinate(value);
     				break;
     		
     			case cy:
-    				mProperties.cy = parseCoOrdinate(v);    		
+    				mParsedAttributes.cy = parseCoOrdinate(value);    		
     				break;
 
     			case r:
-    				mProperties.radius = parseCoOrdinate(v);  
+    				mParsedAttributes.radius = parseCoOrdinate(value);  
     				break;    	
     	
     			case width:
-    				mProperties.width = parseCoOrdinate(v);
+    				mParsedAttributes.width = parseCoOrdinate(value);
     				break;
     	
     			case height:
-    				mProperties.height = parseCoOrdinate(v);    		  
+    				mParsedAttributes.height = parseCoOrdinate(value);    		  
     				break;
     		   		
     			case d:
-    				mProperties.pathData = v;    		     
+    				mParsedAttributes.pathData = value;    		     
     				break;
     		
 	    		case transform:
-	    			mProperties.transformData = v;
+	    			mParsedAttributes.transformData = value;
 	    			break;
 	    		
 	    		case gradientTransform:
-	    			mProperties.transformData = v;
+	    			mParsedAttributes.transformData = value;
 	    			break;
 	    	
 	    		case id:
-	    			mProperties.id = v;
+	    			mParsedAttributes.id = value;
 	    			break;
 	    		
 	    		case href:
-	    			mProperties.xlink_href = v;
+	    			mParsedAttributes.xlink_href = value;
 	    			break;
 
-	    			// ------- Graphical style attributes -------
-  	
 	    		case style:
-	        		mProperties.styleData = v;
+	        		mParsedAttributes.styleData = value;
 	        		parseAttributeValuePairsIntoSaxAttributesImpl(attrImpl);
 	    			// The number of attribute key/value pairs has now been increased. 
 	        		break;
     			
 		        case font_size:
-		        	s.strokePaint.setTextSize(parseCoOrdinate(v));
-		        	s.fillPaint.setTextSize(parseCoOrdinate(v));
+		        	mParsedAttributes.svgStyle.strokePaint.setTextSize(parseCoOrdinate(value));
+		        	mParsedAttributes.svgStyle.fillPaint.setTextSize(parseCoOrdinate(value));
 		        	break;
 		       	
 		        case font_family:
-		        	Typeface typeface = getTypeface(v);
-		        	//if (typeface != null) {
-			        	s.strokePaint.setTypeface(typeface);
-			        	s.fillPaint.setTypeface(typeface);	
-		        	//}
+		        	Typeface typeface = getTypeface(value);
+		        	mParsedAttributes.svgStyle.strokePaint.setTypeface(typeface);
+		        	mParsedAttributes.svgStyle.fillPaint.setTypeface(typeface);	
 		        	break;
 	        
 		        case fill:
-					if (!v.equals("none")) {
-						if (v.startsWith("url")) {
+					if (!value.equals("none")) {
+						if (value.startsWith("url")) {
 							// Assume the form fill:url(#[ID_STRING]) 
-							String idString = v.substring(5, v.length() - 1);
+							String idString = value.substring(5, value.length() - 1);
 							int gradientIdx = this.getGradientByIdString(idString);
 							// TODO: This is giving the Paint a *reference* to one of the Shader objects
 							// in the gradientList. This is possibly okay, but because we need to 
@@ -506,106 +527,130 @@ public class SVGParserRenderer extends DefaultHandler {
 							// subsequent uses of that Shader. 
 							
 							if (gradientIdx != -1) {
-								s.fillPaint.setShader(gradientList.get(gradientIdx).shader);
+								mParsedAttributes.svgStyle.fillPaint.setShader(gradientList.get(gradientIdx).shader);
 							}
 							else if (mPatternMap.containsKey(idString)) {
 								//s.fillPaint.setShader(mPatternList.get(idString).getShader());
-								s.mFillPattern = mPatternMap.get(idString);
+								mParsedAttributes.svgStyle.mFillPattern = mPatternMap.get(idString);
 							}							
 						}
 						
 						else {
 							// Set the colour, while preserving the alpha (in case alpha is to be inherited rather
 							// than being explicity set in the element's own style attributes) 
-							int alpha = s.fillPaint.getAlpha();
-							s.fillPaint.setColor(parseColour(v));
-							s.fillPaint.setAlpha(alpha);
+							int alpha = mParsedAttributes.svgStyle.fillPaint.getAlpha();
+							mParsedAttributes.svgStyle.fillPaint.setColor(parseColour(value));
+							mParsedAttributes.svgStyle.fillPaint.setAlpha(alpha);
 						}
-						s.fillPaint.setStyle(Paint.Style.FILL); 
+						mParsedAttributes.svgStyle.fillPaint.setStyle(Paint.Style.FILL); 
 						// TODO: Should only need do this once in Style constructor!
-						s.hasFill = true;
+						mParsedAttributes.svgStyle.hasFill = true;
 					}
-					else{ // The attribute is fill="none". 
-						s.hasFill = false;
+					else { 
+						// The attribute is fill="none". 
+						mParsedAttributes.svgStyle.hasFill = false;
 					}
 					break;
  
 		        case opacity:
-		        	s.masterOpacity = parseAttrValueFloat(v);
-		        	s.fillPaint.setAlpha((int)(s.masterOpacity*s.fillOpacity*255));
-		        	s.strokePaint.setAlpha((int)(s.masterOpacity*s.strokeOpacity*255));		        	
+		        	mParsedAttributes.svgStyle.masterOpacity = parseAttrValueFloat(value);
+		        	mParsedAttributes.svgStyle.fillPaint.setAlpha((int)(mParsedAttributes.svgStyle.masterOpacity * mParsedAttributes.svgStyle.fillOpacity * 255));
+		        	mParsedAttributes.svgStyle.strokePaint.setAlpha((int)(mParsedAttributes.svgStyle.masterOpacity * mParsedAttributes.svgStyle.strokeOpacity * 255));		        	
 		        	break;
 					
 		        case fill_opacity:
-		        {
-					float opacity = parseAttrValueFloat(v);
-					s.fillOpacity = opacity;
-					s.fillPaint.setAlpha((int)((opacity*s.masterOpacity)*255));			
-		        }
+			        {
+						float opacity = parseAttrValueFloat(value);
+						mParsedAttributes.svgStyle.fillOpacity = opacity;
+						mParsedAttributes.svgStyle.fillPaint.setAlpha((int)((opacity * mParsedAttributes.svgStyle.masterOpacity) * 255));			
+			        }
 					break;
 
 		        case stroke_opacity:
-		        {
-		        	float opacity = parseAttrValueFloat(v);
-					s.strokeOpacity = opacity;
-					s.strokePaint.setAlpha((int)((opacity*s.masterOpacity)*255));
-		        }
+			        {
+			        	float opacity = parseAttrValueFloat(value);
+			        	mParsedAttributes.svgStyle.strokeOpacity = opacity;
+			        	mParsedAttributes.svgStyle.strokePaint.setAlpha((int)((opacity * mParsedAttributes.svgStyle.masterOpacity) * 255));
+			        }
 					break;						
  
 		        case stroke:
-		        	if(!v.equals("none")){	        
-			        	if(v.startsWith("url")){
+		        	if (!value.equals("none")) {	        
+			        	if (value.startsWith("url")) {
 							// Assume the form fill:url(#[ID_STRING]) 
-							int gradientIdx = this.getGradientByIdString(v.substring(5,v.length()-1));
+							int gradientIdx = this.getGradientByIdString(value.substring(5,value.length()-1));
 							// TODO: See comments further above (in 'fill') regarding Shader.
-							s.strokePaint.setShader(gradientList.get(gradientIdx).shader);
+							mParsedAttributes.svgStyle.strokePaint.setShader(gradientList.get(gradientIdx).shader);
 						}
-						else{
+						else {
 							// Set the colour, while preserving the alpha (in case alpha is to be inherited rather
 							// than being explicity set in the element's own style attributes)
-							int alpha = s.strokePaint.getAlpha();
-							s.strokePaint.setColor(parseColour(v));
-							s.strokePaint.setAlpha(alpha);
+							int alpha = mParsedAttributes.svgStyle.strokePaint.getAlpha();
+							mParsedAttributes.svgStyle.strokePaint.setColor(parseColour(value));
+							mParsedAttributes.svgStyle.strokePaint.setAlpha(alpha);
 						}
-						s.strokePaint.setStyle(Paint.Style.STROKE); // TODO: Should only have to do once in the constructor!
-						s.hasStroke = true;
+			        	mParsedAttributes.svgStyle.strokePaint.setStyle(Paint.Style.STROKE); // TODO: Should only have to do once in the constructor!
+			        	mParsedAttributes.svgStyle.hasStroke = true;
 		        	}
-					else{ // The attribute is stroke="none". 
-						s.hasStroke = false;
+					else { // The attribute is stroke="none". 
+						mParsedAttributes.svgStyle.hasStroke = false;
 					}
 					break;
 					
 		        case stroke_width:
-					s.strokePaint.setStrokeWidth(parseCoOrdinate(v));
+		        	mParsedAttributes.svgStyle.strokePaint.setStrokeWidth(parseCoOrdinate(value));
 					break;
 				    		
 		        case points:
-		        	mProperties.pointsData = v;
+		        	mParsedAttributes.pointsData = value;
 		        	break;
 		        	
 		        case text_align:
 		        	Paint.Align align = Paint.Align.LEFT;
-		        	if (v.startsWith("center")) {
+		        	if (value.startsWith("center")) {
 		        		align = Paint.Align.CENTER;
 		        	}
-		        	else if (v.startsWith("right")) {
+		        	else if (value.startsWith("right")) {
 		        		align = Paint.Align.RIGHT;
 		        	}		        	
 		        	
-		        	s.strokePaint.setTextAlign(align);
-		        	s.fillPaint.setTextAlign(align);
+		        	mParsedAttributes.svgStyle.strokePaint.setTextAlign(align);
+		        	mParsedAttributes.svgStyle.fillPaint.setTextAlign(align);
 		        	break;
 					
 		        case viewBox:
-		        	mProperties.viewBox = v;
+		        	mParsedAttributes.viewBox = value;
 		        	break;
 		        	
 				default:
+					if (attrImpl.getQName(n).startsWith(CUSTOM_ATTRIBUTE_NAMESPACE)) {
+						parseCustomAttribute(attrImpl.getLocalName(n), value);	
+					}
 					break;
     		}
     	}
     }
  
+    private void parseCustomAttribute(String localName, String value) {
+    	
+    	switch (CustomAttributes.toAttr(localName)) {
+    	
+	    	case anchor:
+	    		value = value.toLowerCase();
+	    	   	mParsedAttributes.anchorRight = value.contains("right") ? true : false;
+	    	   	mParsedAttributes.anchorBottom = value.contains("bottom") ? true : false;
+	    		break;
+	    		
+	    	case stretch_to_excess:
+	    		value = value.toLowerCase();
+	    		mParsedAttributes.stretchToExcessHeight = value.contains("height") ? true : false;
+	    		mParsedAttributes.stretchToExcessWidth = value.contains("width") ? true : false;
+	    		break;
+	    		
+    		default:
+    			break;
+    	}
+    }
     
     private void linearGradient(){
     	Gradient g = currentGradient; // new Gradient();
@@ -626,19 +671,19 @@ public class SVGParserRenderer extends DefaultHandler {
     	// inherit any properties not defined in this element. 
     
     	g.setCoordinates(
-    			mProperties.x1,
-    			mProperties.y1,
-    			mProperties.x2,
-    			mProperties.y2
+    			mParsedAttributes.x1,
+    			mParsedAttributes.y1,
+    			mParsedAttributes.x2,
+    			mParsedAttributes.y2
     			);
     	
-    	g.id = mProperties.id;
+    	g.id = mParsedAttributes.id;
     	
     	
     	// Best way to deal with xlink might be to do an entire copy of the referenced
     	// Gradient first, and then apply over the top any properties that are 
     	// explicitly defined for this Gradient. 
-    	if (mProperties.xlink_href != null) {
+    	if (mParsedAttributes.xlink_href != null) {
     		
     		// The hrefs have to be dealt with in a second pass, because forward references are possible!
     		
@@ -648,7 +693,7 @@ public class SVGParserRenderer extends DefaultHandler {
     	//		Gradient xlinkGrad = this.gradientList.get(idx);
     	//		currentGradient.stopColours = xlinkGrad.stopColours;
     	//	}
-    			currentGradient.href = mProperties.xlink_href;
+    			currentGradient.href = mParsedAttributes.xlink_href;
     		
     	}    	
     	else{
@@ -683,22 +728,22 @@ public class SVGParserRenderer extends DefaultHandler {
     			mProperties.y2
     			);  
     	*/
-    	g.cx = mProperties.cx;
-    	g.cy = mProperties.cy;
-    	g.radius = mProperties.radius;
+    	g.cx = mParsedAttributes.cx;
+    	g.cy = mParsedAttributes.cy;
+    	g.radius = mParsedAttributes.radius;
     	
     	
     	// Best way to deal with xlink might be to do an entire copy of the referenced
     	// Gradient first, and then apply over the top any properties that are 
     	// explicitly defined for this Gradient. 
-    	if(mProperties.xlink_href!=null){
+    	if(mParsedAttributes.xlink_href!=null){
     		// It'll have the form #abcd where abcd is the ID 
     		//int idx = this.getGradientByIdString(mProperties.xlink_href.substring(1));
     		//if(idx!=-1){
     		//	Gradient xlinkGrad = this.gradientList.get(idx);
     		//	currentGradient.stopColours = xlinkGrad.stopColours;
     		//}
-    		currentGradient.href = mProperties.xlink_href;
+    		currentGradient.href = mParsedAttributes.xlink_href;
     	}
     	else{
     		currentGradient.href = null;
@@ -708,7 +753,7 @@ public class SVGParserRenderer extends DefaultHandler {
         	currentGradient.matrix = transform();
     	//}
     	
-    	g.id = mProperties.id;
+    	g.id = mParsedAttributes.id;
     }
     
 	/**
@@ -720,20 +765,20 @@ public class SVGParserRenderer extends DefaultHandler {
 	 * 3. Quite a lot more - this is work in progress.
 	 */
 	private void startPattern() {
-		addBeginPattern(mProperties.id);
+		addBeginPattern(mParsedAttributes.id);
 		
 		PatternFill patternFill = new PatternFill();
 		
-		if (mProperties.xlink_href != null) {
+		if (mParsedAttributes.xlink_href != null) {
 			// Assume the form xlink:href="#some_id_string"
-			patternFill.setXLinkReferenceId(mProperties.xlink_href.replace("#", ""));
+			patternFill.setXLinkReferenceId(mParsedAttributes.xlink_href.replace("#", ""));
 		}
 		else {			
-			patternFill.setPatternSubtree(mProperties.id);
+			patternFill.setPatternSubtree(mParsedAttributes.id);
 			
 			PathTokenizer t = new PathTokenizer();
 			float x, y, width, height;
-			t.getToken(mProperties.viewBox);
+			t.getToken(mParsedAttributes.viewBox);
 			x = t.tokenF;
 			t.getToken(null);
 			y = t.tokenF;
@@ -747,11 +792,11 @@ public class SVGParserRenderer extends DefaultHandler {
 				patternFill.setPatternViewBox(x, y, width, height);				
 			}
 			else {
-				String id = mProperties.id != null ? mProperties.id : "(no ID specified)";
+				String id = mParsedAttributes.id != null ? mParsedAttributes.id : "(no ID specified)";
 				Log.w(LOGTAG, "Pattern element " + id + " doesn't have viewBox attribute, or has zero viewBox width or height");
 			}	
 		}
-		mPatternMap.put(mProperties.id, patternFill);	
+		mPatternMap.put(mParsedAttributes.id, patternFill);	
 	}
 
 	/**
@@ -951,43 +996,48 @@ public class SVGParserRenderer extends DefaultHandler {
     }    
     
     private void svg(){
-    	mRootSvgHeight = mProperties.height;
-    	mRootSvgWidth = mProperties.width;
+    	mRootSvgHeight = mParsedAttributes.height;
+    	mRootSvgWidth = mParsedAttributes.width;
     }    
     
 	private void rect() {
-		Path p = new Path();
-		p.addRect( mProperties.x, mProperties.y, (mProperties.x+mProperties.width), (mProperties.y+mProperties.height), Path.Direction.CW );
-		currentX = mProperties.x;
-		currentY = mProperties.y;
-		addPath(p);
+		SVGPath path = new SVGPath();
+		path.addRect( mParsedAttributes.x, mParsedAttributes.y, (mParsedAttributes.x+mParsedAttributes.width), (mParsedAttributes.y+mParsedAttributes.height), Path.Direction.CW );
+		setCustomPathAttributes(path);
+		mCurrentX = mParsedAttributes.x;
+		mCurrentY = mParsedAttributes.y;
+		addPath(path);
 	}
 	
 	private void circle() {
-		Path p = new Path();
-		p.addCircle(mProperties.cx, mProperties.cy, mProperties.radius, Direction.CW);
-		currentX = mProperties.cx;
-		currentY = mProperties.cy;
-		addPath(p);
+		SVGPath path = new SVGPath();
+		path.addCircle(mParsedAttributes.cx, mParsedAttributes.cy, mParsedAttributes.radius, Direction.CW);
+		setCustomPathAttributes(path);
+		mCurrentX = mParsedAttributes.cx;
+		mCurrentY = mParsedAttributes.cy;
+		addPath(path);
 	}
 	
 	private void line(){
-		Path p = new Path();
-		p.moveTo(mProperties.x1, mProperties.y1);
-		p.lineTo(mProperties.x2, mProperties.y2);
-		currentX = mProperties.x2;
-		currentY = mProperties.y2;
-		addPath(p);
+		SVGPath path = new SVGPath();
+		path.moveTo(mParsedAttributes.x1, mParsedAttributes.y1);
+		path.lineTo(mParsedAttributes.x2, mParsedAttributes.y2);
+		setCustomPathAttributes(path);
+		mCurrentX = mParsedAttributes.x2;
+		mCurrentY = mParsedAttributes.y2;
+		addPath(path);
 	}
 
-	
-	
+	private void setCustomPathAttributes(SVGPath path) {
+		path.setAnchorRight(mParsedAttributes.anchorRight);
+		path.setAnchorBottom(mParsedAttributes.anchorBottom);
+		path.setStretchToExcessWidth(mParsedAttributes.stretchToExcessWidth);
+		path.setStretchToExcessHeight(mParsedAttributes.stretchToExcessHeight);
+	}
 	
 	private void text_element() {
 		addStyle();
-		//if (mProperties.transformData != null) {
-			addTransform();
-		//}
+		addTransform();
 	}
 	
 	/**
@@ -996,7 +1046,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	 */
 	private void text_characters(char[] src, int srcPos, int length) {
 		//addStyle();
-		this.textstringList.add( new Textstring(mProperties.x, mProperties.y, src, srcPos, length) );
+		this.textstringList.add( new Textstring(mParsedAttributes.x, mParsedAttributes.y, src, srcPos, length) );
 		// Assume for now that all textstrings have a matrix
 		//if (mProperties.transformData != null) {
 		//	addTransform();
@@ -1012,29 +1062,24 @@ public class SVGParserRenderer extends DefaultHandler {
 	}
 	
 	private void tspan_characters(char[] src, int srcPos, int length) {	
-		this.textstringList.add( new Textstring(mProperties.x, mProperties.y, src, srcPos, length) );
+		this.textstringList.add( new Textstring(mParsedAttributes.x, mParsedAttributes.y, src, srcPos, length) );
 		// Assume for now that all textstrings have a matrix
 		//if (mProperties.transformData != null) {
 		//	addTransform();
 		//}
 		addText();	
 	}
-	
-	static float currentX;
-	static float currentY;
-	static float lastControlPointX = 0;
-	static float lastControlPointY = 0;
-	
+		
 	private void path(){
-		float rx,ry,x_axis_rotation,x,y,x1,y1,x2,y2;
+		float rx, ry, x_axis_rotation, x, y, x1, y1, x2, y2;
 		boolean firstElement = true, carry = false, large_arc_flag, sweep_flag;
 		PathTokenizer t = new PathTokenizer();
-		t.getToken(mProperties.pathData);
-		Path p = new Path();
+		t.getToken(mParsedAttributes.pathData);
+		SVGPath path = new SVGPath();
 		char currentCommandLetter = '?';
 		
 		do{
-			if(t.currentTok == PathTokenizer.LTOK_LETTER){
+			if (t.currentTok == PathTokenizer.LTOK_LETTER) {
 				currentCommandLetter = t.tokenChar;
 				t.getToken(null);				
 			}
@@ -1042,7 +1087,7 @@ public class SVGParserRenderer extends DefaultHandler {
 			// If the current token is not alpha (a letter) but a number, then it's an implied command,
 			// i.e. assume last used command letter.
 			
-			switch(currentCommandLetter){
+			switch (currentCommandLetter) {
 			
 				case 'M':
 				case 'm':
@@ -1052,12 +1097,12 @@ public class SVGParserRenderer extends DefaultHandler {
 					// A relative moveto command, 'm', is interpreted as an absolute
 					// moveto (M) if it's the first element. 
 					if(currentCommandLetter=='m' && firstElement == false){
-						x+=currentX;
-						y+=currentY;
+						x+=mCurrentX;
+						y+=mCurrentY;
 					}
-					p.moveTo(x,y);
-					currentX = x;
-					currentY = y;
+					path.moveTo(x,y);
+					mCurrentX = x;
+					mCurrentY = y;
 					if(currentCommandLetter=='M'){
 						currentCommandLetter = 'L';
 					}
@@ -1072,38 +1117,38 @@ public class SVGParserRenderer extends DefaultHandler {
 				t.getToken(null);
 				y = t.tokenF;				
 				if(currentCommandLetter=='l'){
-					x+=currentX;
-					y+=currentY;
+					x+=mCurrentX;
+					y+=mCurrentY;
 				}
-				p.lineTo(x,y);
-				currentX = x;
-				currentY = y;				
+				path.lineTo(x,y);
+				mCurrentX = x;
+				mCurrentY = y;				
 				break;
 				
 			case 'H':
 			case 'h':
 				x = t.tokenF;				
 				if(currentCommandLetter=='h'){
-					x+=currentX;
+					x+=mCurrentX;
 				}				
-				p.lineTo(x,currentY);				
-				currentX = x;										
+				path.lineTo(x,mCurrentY);				
+				mCurrentX = x;										
 				break;
 
 			case 'V':
 			case 'v':
 				y = t.tokenF;				
 				if(currentCommandLetter=='v'){
-					y+=currentY;
+					y+=mCurrentY;
 				}				
-				p.lineTo(currentX,y);				
-				currentY = y;										
+				path.lineTo(mCurrentX,y);				
+				mCurrentY = y;										
 				break;
 			
 				
 			case 'z':
 				// TODO: Having some trouble implementing 'z' / close. Need to revisit. 
-				p.close();
+				path.close();
 				carry = true;
 				break;
 				
@@ -1123,12 +1168,12 @@ public class SVGParserRenderer extends DefaultHandler {
 				t.getToken(null);
 				y = t.tokenF;
 				if (currentCommandLetter == 'a' ) {
-					x+=currentX;
-					y+=currentY;
+					x+=mCurrentX;
+					y+=mCurrentY;
 				}		
-				arcTo(p, rx, ry, x_axis_rotation, large_arc_flag, sweep_flag, x, y);			
-				currentX = x;
-				currentY = y;				
+				arcTo(path, rx, ry, x_axis_rotation, large_arc_flag, sweep_flag, x, y);			
+				mCurrentX = x;
+				mCurrentY = y;				
 				break;
 				
 			case 'C':
@@ -1145,20 +1190,20 @@ public class SVGParserRenderer extends DefaultHandler {
 				t.getToken(null);
 				y = t.tokenF;
 				if(currentCommandLetter=='c'){
-					x+=currentX;
-					y+=currentY;
+					x+=mCurrentX;
+					y+=mCurrentY;
 					
-					x1+=currentX;
-					y1+=currentY;
-					x2+=currentX;
-					y2+=currentY;
+					x1+=mCurrentX;
+					y1+=mCurrentY;
+					x2+=mCurrentX;
+					y2+=mCurrentY;
 				}	
 				// TODO: Could alternatively make use of rCubicTo if it's to be relative.
-				p.cubicTo(x1, y1, x2, y2, x, y);
-				lastControlPointX = x2;
-				lastControlPointY = y2;
-				currentX = x;
-				currentY = y;					
+				path.cubicTo(x1, y1, x2, y2, x, y);
+				mLastControlPointX = x2;
+				mLastControlPointY = y2;
+				mCurrentX = x;
+				mCurrentY = y;					
 				break;				
 				
 			case 'S':
@@ -1171,17 +1216,17 @@ public class SVGParserRenderer extends DefaultHandler {
 				t.getToken(null);
 				y = t.tokenF;
 				if(currentCommandLetter=='s'){
-					x+=currentX;
-					y+=currentY;
-					x2+=currentX;
-					y2+=currentY;
+					x+=mCurrentX;
+					y+=mCurrentY;
+					x2+=mCurrentX;
+					y2+=mCurrentY;
 				}	
-				x1 = 2 * currentX - lastControlPointX;
-				y1 = 2 * currentY - lastControlPointY;
+				x1 = 2 * mCurrentX - mLastControlPointX;
+				y1 = 2 * mCurrentY - mLastControlPointY;
 				// TODO: Could alternatively make use of rCubicTo if it's a relative command.
-				p.cubicTo(x1, y1, x2, y2, x, y);
-				currentX = x;
-				currentY = y;					
+				path.cubicTo(x1, y1, x2, y2, x, y);
+				mCurrentX = x;
+				mCurrentY = y;					
 				break;
 							
 				
@@ -1207,34 +1252,34 @@ public class SVGParserRenderer extends DefaultHandler {
 			
 		} while( t.currentTok != PathTokenizer.LTOK_END );
 			
-		addPath(p);
+		setCustomPathAttributes(path);
+		addPath(path);
 	}
 
-	
-	
 	private void polygon(){
 		float x,y;
 		PathTokenizer t = new PathTokenizer();
-		t.getToken(mProperties.pointsData);
-		Path p = new Path();
+		t.getToken(mParsedAttributes.pointsData);
+		SVGPath path = new SVGPath();
 
 		x = t.tokenF;
 		t.getToken(null);
 		y = t.tokenF;
 		t.getToken(null);
-		p.moveTo(x, y);
+		path.moveTo(x, y);
 		
 		do{
 			x = t.tokenF;
 			t.getToken(null);
 			y = t.tokenF;
 			t.getToken(null);
-			p.lineTo(x, y);
+			path.lineTo(x, y);
 
 		} while( t.currentTok != PathTokenizer.LTOK_END );
 			
-		p.close();
-		addPath(p);
+		path.close();
+		setCustomPathAttributes(path);
+		addPath(path);
 	}
 	
 	private Matrix transform(){
@@ -1243,8 +1288,8 @@ public class SVGParserRenderer extends DefaultHandler {
 		Matrix m = new Matrix();
 		ValueTokenizer t = new ValueTokenizer();
 		
-		if(mProperties.transformData!=null){
-			t.getToken(mProperties.transformData);	
+		if(mParsedAttributes.transformData!=null){
+			t.getToken(mParsedAttributes.transformData);	
 			do{
 				if(t.currentTok == ValueTokenizer.LTOK_STRING){		
 					
@@ -1300,11 +1345,10 @@ public class SVGParserRenderer extends DefaultHandler {
 				t.getToken(null);
 				
 			} while( t.currentTok != ValueTokenizer.LTOK_END );
-			mProperties.transformData = null;
+			mParsedAttributes.transformData = null;
 		}
 		return m;
 	}
-	
 	
 	private void gradientStyle(){
 		Map<String, String> map = new HashMap<String, String>();
@@ -1335,31 +1379,28 @@ public class SVGParserRenderer extends DefaultHandler {
 			currentGradient.stopColours.add(stopColour);
 		}
 		
-	}
-	
+	}	
 	
 	private void parseAttributeValuePairsIntoMap( Map<String,String> map ){
 		// Typical format is:
 		// font-size:40px;font-style:normal;font-variant:normal; ...
 		final Pattern keyValuePattern = Pattern.compile("([\\w-#]+\\s*):(\\s*[\\w-#\\.\\(\\)\\s,]*)");  // basically need to change this to match virtually anything on each side of the : except for a few symbols
-		Matcher keyValueMatcher = keyValuePattern.matcher(mProperties.styleData);
+		Matcher keyValueMatcher = keyValuePattern.matcher(mParsedAttributes.styleData);
 		while(keyValueMatcher.find()){
 			map.put(keyValueMatcher.group(1), keyValueMatcher.group(2));
 		}			
 	}
-
 	
 	private int parseAttributeValuePairsIntoSaxAttributesImpl( AttributesImpl attr ){
 		int quantityAdded = 0;
 		final Pattern keyValuePattern = Pattern.compile("([\\w-#]+\\s*):(\\s*[\\w-#\\.\\(\\)\\s,]*)");  // basically need to change this to match virtually anything on each side of the : except for a few symbols
-		Matcher keyValueMatcher = keyValuePattern.matcher(mProperties.styleData);
+		Matcher keyValueMatcher = keyValuePattern.matcher(mParsedAttributes.styleData);
 		while(keyValueMatcher.find()){
 			attr.addAttribute("", keyValueMatcher.group(1), "", "", keyValueMatcher.group(2));
 			quantityAdded++;
 		}		
 		return quantityAdded;
 	}	
-	
 	
 	/**
 	 * Parse a basic data type of type <coordinate> or <length>. 
@@ -1485,8 +1526,8 @@ public class SVGParserRenderer extends DefaultHandler {
         // Get the current (x, y) coordinates of the path
         //Point2D p2d = path.getCurrentPoint();
         
-        float x0 = currentX; //(float) p2d.getX();
-        float y0 = currentY; //(float) p2d.getY();
+        float x0 = mCurrentX; //(float) p2d.getX();
+        float y0 = mCurrentY; //(float) p2d.getY();
         // Compute the half distance between the current and the final point
         float dx2 = (x0 - x) / 2.0f;
         float dy2 = (y0 - y) / 2.0f;
@@ -1588,7 +1629,7 @@ public class SVGParserRenderer extends DefaultHandler {
 //        }
 //        else{
         	//path.addArc(bounds, angleStart, angleExtent);
-        	addArc(new Arc(bounds, angleStart, angleExtent, mProperties.id));
+        	addArc(new Arc(bounds, angleStart, angleExtent, mParsedAttributes.id));
 //        }    
 	}
 
@@ -1805,14 +1846,14 @@ public class SVGParserRenderer extends DefaultHandler {
 	// -------------------------------------------------------------------------------------
 	// Code-sequence build functions
 	
-	private void addPath(Path p){
+	private void addPath(Path path){
 		// This may well have a lot more arguments for stuff that's specific to the path
 		// i.e. contained within the <path.../> element but can't be expressed in the Path
 		// object, e.g. its ID.
 		addIdIfContainsSpecialPrefix();
 		// TODO: Should we be doing this check? What if the evaluator expects there to be a 
 		// Style object?
-		if(this.mProperties.svgStyle!=null){ 
+		if (this.mParsedAttributes.svgStyle != null) { 
 			addStyle();
 		}		
 		
@@ -1833,7 +1874,7 @@ public class SVGParserRenderer extends DefaultHandler {
 			addTransform();
 		//}
 
-		this.pathList.add( p );
+		pathList.add(path);
 		addInstruction(INST_PATH);
 	}
 	
@@ -1889,7 +1930,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	}
 	
 	private void addStyle(){
-		this.styleList.add(mProperties.svgStyle);
+		this.styleList.add(mParsedAttributes.svgStyle);
 		//styleList.add(styleParseStack.peek());
 		addInstruction(INST_STYLE);
 	}
@@ -1906,8 +1947,8 @@ public class SVGParserRenderer extends DefaultHandler {
 	}	
 	
 	private void addIdIfContainsSpecialPrefix(){
-		if(mProperties.id.toLowerCase().startsWith(SPECIAL_ID_PREFIX_ANIM)){
-			idstringList.add(mProperties.id);
+		if(mParsedAttributes.id.toLowerCase().startsWith(SPECIAL_ID_PREFIX_ANIM)){
+			idstringList.add(mParsedAttributes.id);
 			addInstruction(INST_IDSTRING);
 		}
 	}
@@ -1959,20 +2000,26 @@ public class SVGParserRenderer extends DefaultHandler {
 			uniformScaleFactor = Math.max(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
 		else
 			uniformScaleFactor = Math.min(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
-		float excessY = (view.getHeight() / mRootSvgHeight) - uniformScaleFactor;
-		float excessX = view.getWidth() - (uniformScaleFactor * mRootSvgWidth);
-		paintImage(canvas, subtreeId, uniformScaleFactor, uniformScaleFactor, excessX, excessY, animHandler, fill, false);	
+		float excessHeight = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
+		float excessWidth = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+		canvas.scale(uniformScaleFactor, uniformScaleFactor);
+		paintImage(canvas, subtreeId, excessWidth, excessHeight, animHandler, fill, false);	
 	}
 		
 	/**
-	 * 
+	 * Render the SVG image to the supplied Canvas. 
+	 * The entire SVG image can be drawn or, optionally, a specific 'subtree' is only drawn by specifying the ID of a containing
+	 * &lt;g&gt; group element in the original SVG document.
+	 * The image is drawn to the Canvas in its original width / height ratio, using dimensions from the original SVG document.
+	 * The caller is responsible for applying appropriate scale to the Canvas to ensure proper fit and / or apply stretch
+	 * effects. 
+	 * The purpose of the excessWidth and excessHeight arguments is for use with "anchor" attributes that can be applied to 
+	 * shapes and paths, which is a special attribute provided by this library and is not part of the SVG standard. 
 	 * @param canvas The canvas on which to make the drawing calls. 
 	 * @param subtreeId ID of a subtree in the SVG image to render. The ID needs to be the ID
 	 * of a &lt;g&gt; group element. Pass null to render entire image. 
-	 * @param scaleX
-	 * @param scaleY
-	 * @param excessWidth
-	 * @param excessHeight
+	 * @param excessWidth In terms of SVG document width units, the amount of additional width available in the container. 
+	 * @param excessHeight In terms of SVG document width units, the amount of additional height available in the container. 
 	 * @param animHandler Animation callback handler
 	 * @param fill
 	 * @param isDrawingPatternTile Normally should be false. Set to true if the call is being
@@ -1981,13 +2028,12 @@ public class SVGParserRenderer extends DefaultHandler {
 	 * The result is that the vector data inside the &lt;pattern&gt; element is drawn to Canvas
 	 * as if it were regular image data. 
 	 */
-	void paintImage(Canvas canvas, String subtreeId, float scaleX, float scaleY, float excessWidth, float excessHeight,
+	void paintImage(Canvas canvas, String subtreeId, float excessWidth, float excessHeight, 
 			ITpsvgController animHandler, boolean fill, boolean isDrawingPatternTile) {		
 
 		Canvas mCanvas = canvas;
-		canvas.scale(scaleX, scaleY);
-		Path workingPath = new Path();
-		Path carryPath = new Path();
+		SVGPath workingPath = new SVGPath();
+		Path carryPath = new SVGPath();
 		int gDepth = 1;
 		boolean mSkipPattern = false;
 
@@ -2057,30 +2103,51 @@ public class SVGParserRenderer extends DefaultHandler {
 				animId = null;
 				animIteration = 0;
 				
-				do{
+				do {
 					
 					if (doSpecialIdCallbackForNextElement == true) {
 						if (animId == null) {
 							animId = idstringListIterator.next();
 						}
-						if(animHandler != null){
+						if (animHandler != null) {
 							animMatrix.reset();
-							
-							// test - for 9-patch anchor idea
-							if (animId.equals("_animanchorright")) {
-								animMatrix.postTranslate(excessWidth, 0);
-							}
-							
-							
+														
 							doSpecialIdCallbackForNextElement = 
 								animHandler.animElement(animId, animIteration++, animMatrix, currentStrokePaint, currentFillPaint);
 							workingPath.transform(animMatrix);
 						
 						}
-						else{
+						else {
 							doSpecialIdCallbackForNextElement = false;
 						}
 					}
+					
+					if (workingPath.usesExcessWidthOrHeight()) {
+						if (workingPath.getAnchorRight()) {
+							animMatrix.reset();
+							animMatrix.postTranslate(excessWidth, 0);
+							workingPath.transform(animMatrix);
+						}	
+						if (workingPath.getAnchorBottom()) {
+							animMatrix.reset();
+							animMatrix.postTranslate(0, excessHeight);
+							workingPath.transform(animMatrix);
+						}	
+						if (workingPath.getStretchToExcessWidth()) {
+							RectF bounds = new RectF();
+							workingPath.computeBounds(bounds, false);
+							animMatrix.reset();
+							animMatrix.setScale((bounds.right - bounds.left + excessWidth) / (bounds.right - bounds.left), 1, bounds.left, 0);
+							workingPath.transform(animMatrix);							
+						}
+						if (workingPath.getStretchToExcessHeight()) {
+							RectF bounds = new RectF();
+							workingPath.computeBounds(bounds, false);
+							animMatrix.reset();
+							animMatrix.setScale(1, (bounds.bottom - bounds.top + excessHeight) / (bounds.bottom - bounds.top), 0, bounds.top);
+							workingPath.transform(animMatrix);
+						}
+					}		
 				
 					shaderMatrix = null; 
 					if(currentFillPaint != null) {
@@ -2470,34 +2537,6 @@ public class SVGParserRenderer extends DefaultHandler {
 			this.angleExtent = angleExtent;
 			this.animId = animId;
 		}
-	}
-	
-	private class Properties {
-		
-		float x;
-		float y;
-		
-		float x1;
-		float y1;
-		float x2;
-		float y2;
-		float cx;
-		float cy;
-		
-		float radius;
-		float width;
-		float height;
-		
-		String pathData;
-		String transformData;
-		String styleData;
-		String pointsData;
-		SvgStyle svgStyle;
-
-		String id;
-		String xlink_href;
-		
-		String viewBox;
 	}
 }
 

@@ -18,7 +18,7 @@ public class SVGPatternShader extends BitmapShader {
 		Canvas canvas = new Canvas(bitmap);
 		canvas.save();
 		canvas.translate(-viewBoxX, -viewBoxY);
-		image.paintImage(canvas, subtreeId, 1, 1, 0, 0, null, false, true);
+		image.paintImage(canvas, subtreeId, 0, 0, null, false, true);
 		canvas.restore();
 		return bitmap;
 	}
