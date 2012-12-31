@@ -86,6 +86,8 @@ public class SVGParserRenderer extends DefaultHandler {
 	/** Supported standard SVG attributes */
 	private enum StandardAttributes {
 		x, y, x1, y1, x2, y2, cx, cy, fx, fy, r,
+		rx,
+		ry,
 		height, width,
 		d,
 		transform, gradientTransform,
@@ -422,6 +424,8 @@ public class SVGParserRenderer extends DefaultHandler {
        	mParsedAttributes.x2 = 0;
        	mParsedAttributes.y1 = 0;
        	mParsedAttributes.y2 = 0;
+       	mParsedAttributes.rx = 0;
+       	mParsedAttributes.ry = 0;
        	
 		// Not sure if the 'opacity' attribute (as opposed to fill-opacity or stroke-opacity
 		// attributes) is supposed to inherit, so for now reset it to 1 each time. Remove this later
@@ -478,7 +482,15 @@ public class SVGParserRenderer extends DefaultHandler {
     			case r:
     				mParsedAttributes.radius = parseCoOrdinate(value);  
     				break;    	
-    	
+
+    			case rx:
+    				mParsedAttributes.rx = parseCoOrdinate(value);  
+    				break;    	
+    				
+    			case ry:
+    				mParsedAttributes.ry = parseCoOrdinate(value);  
+    				break;    	
+    				
     			case width:
     				mParsedAttributes.width = parseCoOrdinate(value);
     				break;
@@ -1013,7 +1025,8 @@ public class SVGParserRenderer extends DefaultHandler {
     
 	private void rect() {
 		SVGPath path = new SVGPath();
-		path.addRect( mParsedAttributes.x, mParsedAttributes.y, (mParsedAttributes.x+mParsedAttributes.width), (mParsedAttributes.y+mParsedAttributes.height), Path.Direction.CW );
+		RectF rectangle = new RectF(mParsedAttributes.x, mParsedAttributes.y, (mParsedAttributes.x+mParsedAttributes.width), (mParsedAttributes.y+mParsedAttributes.height));
+		path.addRoundRect(rectangle, mParsedAttributes.rx, mParsedAttributes.ry, Path.Direction.CW);
 		setCustomPathAttributes(path);
 		mCurrentX = mParsedAttributes.x;
 		mCurrentY = mParsedAttributes.y;

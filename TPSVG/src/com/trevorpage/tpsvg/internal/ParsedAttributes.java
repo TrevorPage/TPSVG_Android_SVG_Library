@@ -14,6 +14,9 @@ public class ParsedAttributes {
 	public float cx;
 	public float cy;
 	
+	public float rx;
+	public float ry;
+	
 	public float radius;
 	public float width;
 	public float height;
