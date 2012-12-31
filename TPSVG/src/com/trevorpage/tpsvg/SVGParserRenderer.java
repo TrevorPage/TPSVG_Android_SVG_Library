@@ -412,6 +412,17 @@ public class SVGParserRenderer extends DefaultHandler {
        	mParsedAttributes.anchorBottom = false;
        	mParsedAttributes.stretchToExcessWidth = false;
        	mParsedAttributes.stretchToExcessHeight = false;
+       	// It is important to reset co-ordinates to zero because I've seen some elements (produced by Illustrator) that
+       	// omit co-ordinates (implying 0,0 or top left) and use a transform to actually place the element. 
+       	mParsedAttributes.x = 0;
+       	mParsedAttributes.y = 0;
+       	mParsedAttributes.cx = 0;
+       	mParsedAttributes.cy = 0;
+       	mParsedAttributes.x1 = 0;
+       	mParsedAttributes.x2 = 0;
+       	mParsedAttributes.y1 = 0;
+       	mParsedAttributes.y2 = 0;
+       	
 		// Not sure if the 'opacity' attribute (as opposed to fill-opacity or stroke-opacity
 		// attributes) is supposed to inherit, so for now reset it to 1 each time. Remove this later
 		// if it needs to inherit. Also, fill-opacity and stroke-opacity do inherit for time being. 
