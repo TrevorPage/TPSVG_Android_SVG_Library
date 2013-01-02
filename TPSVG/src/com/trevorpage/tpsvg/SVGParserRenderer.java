@@ -1697,8 +1697,14 @@ public class SVGParserRenderer extends DefaultHandler {
 	
 	private class ValueTokenizer {
 	
-		private static final String REGEXP_NUMBER	= "([-+]?[0-9]*[\\.]?[0-9]+)";
-		private static final String REGEXP_STRING	= "([a-zA-Z_]+)"; // Matches a string
+		/** Matches a number with optional exponent. Not perfect as it'd ideally be [-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?, but the
+		   individual regular expressions can't have groups because the grouping is used as part of the tokenization. 
+		   This expression therefore could match a number with just an 'e' or even a - or + at the end of it, which is hopefully okay
+		   because it isn't being used in a math expression parser. */
+		private static final String REGEXP_NUMBER	= "([-+]?[0-9]*[\\.]?[0-9]+[eE]?[-+]?[0-9]*)";  
+		/** Matches a string. */
+		private static final String REGEXP_STRING	= "([a-zA-Z_]+)"; 
+		/** Matches whitespace. */
 		private static final String REGEXP_SPACE	= "([\\s+,\\(\\)]+)";
 		
 		private static final String REGEXP_TOKENS = REGEXP_NUMBER + "|" + REGEXP_STRING + "|" + REGEXP_SPACE;
