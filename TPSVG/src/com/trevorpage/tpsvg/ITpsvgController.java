@@ -27,8 +27,14 @@ public interface ITpsvgController {
 	 * tick mark can be replicated and placed at the required degree angles programmatically, thus
 	 * allowing the scale of the gauge to be manipulated at run-time. 
 	 */
-	
 	boolean animElement(String id, int iteration, Matrix matrix, Paint sroke, Paint fill);
+	
+	/**
+	 * Inform the controller of remainder width or height.
+	 * @param remainderWidth
+	 * @param remainderHeight
+	 */
+	void setRemainderWidthOrHeight(float remainderWidth, float remainderHeight);
 	
 	/**
 	 * 

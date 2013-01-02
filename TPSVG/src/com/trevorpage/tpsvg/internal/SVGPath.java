@@ -11,8 +11,8 @@ public class SVGPath extends Path {
 
 	private boolean mAnchorRight;
 	private boolean mAnchorBottom;
-	private boolean mStretchToExcessWidth;
-	private boolean mStretchToExcessHeight;
+	private boolean mStretchToRemainderWidth;
+	private boolean mStretchToRemainderHeight;
 	
 	public SVGPath() {
 		super();
@@ -27,8 +27,8 @@ public class SVGPath extends Path {
 	private void init() {
 		mAnchorRight = false;
 		mAnchorBottom = false;
-		mStretchToExcessWidth = false;
-		mStretchToExcessHeight = false;
+		mStretchToRemainderWidth = false;
+		mStretchToRemainderHeight = false;
 	}
 	
 	public void rewind() {
@@ -72,24 +72,24 @@ public class SVGPath extends Path {
 		return mAnchorBottom;
 	}
 	
-	public boolean usesExcessWidthOrHeight() {
-		return mAnchorBottom || mAnchorRight || mStretchToExcessWidth || mStretchToExcessHeight;
+	public boolean usesRemainderWidthOrHeight() {
+		return mAnchorBottom || mAnchorRight || mStretchToRemainderWidth || mStretchToRemainderHeight;
 	}
 	
-	public void setStretchToExcessWidth(boolean stretch) {
-		mStretchToExcessWidth = stretch;
+	public void setStretchToRemainderWidth(boolean stretch) {
+		mStretchToRemainderWidth = stretch;
 	}
 	
-	public boolean getStretchToExcessWidth() {
-		return mStretchToExcessWidth;
+	public boolean getStretchToRemainderWidth() {
+		return mStretchToRemainderWidth;
 	}
 
-	public void setStretchToExcessHeight(boolean stretch) {
-		mStretchToExcessHeight = stretch;
+	public void setStretchToRemainderHeight(boolean stretch) {
+		mStretchToRemainderHeight = stretch;
 	}
 	
-	public boolean getStretchToExcessHeight() {
-		return mStretchToExcessHeight;
+	public boolean getStretchToRemainderHeight() {
+		return mStretchToRemainderHeight;
 	}
 	
 	private void copyCustomAttributes(Path src) {
@@ -100,11 +100,11 @@ public class SVGPath extends Path {
 			if (((SVGPath)src).getAnchorRight()) {
 				setAnchorRight(true);
 			}
-			if (((SVGPath)src).getStretchToExcessWidth()) {
-				setStretchToExcessWidth(true);
+			if (((SVGPath)src).getStretchToRemainderWidth()) {
+				setStretchToRemainderWidth(true);
 			}
-			if (((SVGPath)src).getStretchToExcessHeight()) {
-				setStretchToExcessHeight(true);
+			if (((SVGPath)src).getStretchToRemainderHeight()) {
+				setStretchToRemainderHeight(true);
 			}
 		}
 	}

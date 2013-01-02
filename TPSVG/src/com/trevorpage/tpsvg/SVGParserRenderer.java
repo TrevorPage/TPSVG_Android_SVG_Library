@@ -123,7 +123,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	 * are prefixed with CUSTOM_ATTRIBUTE_NAMESPACE */
 	private enum CustomAttributes {
 		anchor,
-		stretch_to_excess,
+		stretch_to_remainder,
 		novalue;
 		
 	    public static CustomAttributes toAttr(String str) {
@@ -412,8 +412,8 @@ public class SVGParserRenderer extends DefaultHandler {
     	mParsedAttributes.id = "";
        	mParsedAttributes.anchorRight = false;
        	mParsedAttributes.anchorBottom = false;
-       	mParsedAttributes.stretchToExcessWidth = false;
-       	mParsedAttributes.stretchToExcessHeight = false;
+       	mParsedAttributes.stretchToRemainderWidth = false;
+       	mParsedAttributes.stretchToRemainderWidth = false;
        	// It is important to reset co-ordinates to zero because I've seen some elements (produced by Illustrator) that
        	// omit co-ordinates (implying 0,0 or top left) and use a transform to actually place the element. 
        	mParsedAttributes.x = 0;
@@ -664,10 +664,10 @@ public class SVGParserRenderer extends DefaultHandler {
 	    	   	mParsedAttributes.anchorBottom = value.contains("bottom") ? true : false;
 	    		break;
 	    		
-	    	case stretch_to_excess:
+	    	case stretch_to_remainder:
 	    		value = value.toLowerCase();
-	    		mParsedAttributes.stretchToExcessHeight = value.contains("height") ? true : false;
-	    		mParsedAttributes.stretchToExcessWidth = value.contains("width") ? true : false;
+	    		mParsedAttributes.stretchToRemainderHeight = value.contains("height") ? true : false;
+	    		mParsedAttributes.stretchToRemainderWidth = value.contains("width") ? true : false;
 	    		break;
 	    		
     		default:
@@ -1055,8 +1055,8 @@ public class SVGParserRenderer extends DefaultHandler {
 	private void setCustomPathAttributes(SVGPath path) {
 		path.setAnchorRight(mParsedAttributes.anchorRight);
 		path.setAnchorBottom(mParsedAttributes.anchorBottom);
-		path.setStretchToExcessWidth(mParsedAttributes.stretchToExcessWidth);
-		path.setStretchToExcessHeight(mParsedAttributes.stretchToExcessHeight);
+		path.setStretchToRemainderWidth(mParsedAttributes.stretchToRemainderWidth);
+		path.setStretchToRemainderHeight(mParsedAttributes.stretchToRemainderHeight);
 	}
 	
 	private void text_element() {
@@ -2030,10 +2030,10 @@ public class SVGParserRenderer extends DefaultHandler {
 			uniformScaleFactor = Math.max(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
 		else
 			uniformScaleFactor = Math.min(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
-		float excessHeight = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
-		float excessWidth = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+		float remainderHeight = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
+		float remainderWidth = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
 		canvas.scale(uniformScaleFactor, uniformScaleFactor);
-		paintImage(canvas, subtreeId, excessWidth, excessHeight, animHandler, fill, false);	
+		paintImage(canvas, subtreeId, remainderWidth, remainderHeight, animHandler, fill, false);	
 	}
 		
 	/**
@@ -2043,13 +2043,13 @@ public class SVGParserRenderer extends DefaultHandler {
 	 * The image is drawn to the Canvas in its original width / height ratio, using dimensions from the original SVG document.
 	 * The caller is responsible for applying appropriate scale to the Canvas to ensure proper fit and / or apply stretch
 	 * effects. 
-	 * The purpose of the excessWidth and excessHeight arguments is for use with "anchor" attributes that can be applied to 
+	 * The purpose of the remainderWidth and remainderHeight arguments is for use with "anchor" attributes that can be applied to 
 	 * shapes and paths, which is a special attribute provided by this library and is not part of the SVG standard. 
 	 * @param canvas The canvas on which to make the drawing calls. 
 	 * @param subtreeId ID of a subtree in the SVG image to render. The ID needs to be the ID
 	 * of a &lt;g&gt; group element. Pass null to render entire image. 
-	 * @param excessWidth In terms of SVG document width units, the amount of additional width available in the container. 
-	 * @param excessHeight In terms of SVG document width units, the amount of additional height available in the container. 
+	 * @param remainderWidth In terms of SVG document width units, the amount of additional width available in the container. 
+	 * @param remainderHeight In terms of SVG document width units, the amount of additional height available in the container. 
 	 * @param animHandler Animation callback handler
 	 * @param fill
 	 * @param isDrawingPatternTile Normally should be false. Set to true if the call is being
@@ -2058,7 +2058,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	 * The result is that the vector data inside the &lt;pattern&gt; element is drawn to Canvas
 	 * as if it were regular image data. 
 	 */
-	void paintImage(Canvas canvas, String subtreeId, float excessWidth, float excessHeight, 
+	void paintImage(Canvas canvas, String subtreeId, float remainderWidth, float remainderHeight, 
 			ITpsvgController animHandler, boolean fill, boolean isDrawingPatternTile) {		
 
 		Canvas mCanvas = canvas;
@@ -2111,6 +2111,10 @@ public class SVGParserRenderer extends DefaultHandler {
 			return;
 		}
 		
+		if (animHandler != null) {
+			animHandler.setRemainderWidthOrHeight(remainderWidth, remainderHeight);
+		}
+		
 		while (bytecodeArr[codePtr] != INST_END && gDepth > 0) {
 							
 			switch(bytecodeArr[codePtr]) {
@@ -2152,29 +2156,29 @@ public class SVGParserRenderer extends DefaultHandler {
 						}
 					}
 					
-					if (workingPath.usesExcessWidthOrHeight()) {
+					if (workingPath.usesRemainderWidthOrHeight()) {
 						if (workingPath.getAnchorRight()) {
 							animMatrix.reset();
-							animMatrix.postTranslate(excessWidth, 0);
+							animMatrix.postTranslate(remainderWidth, 0);
 							workingPath.transform(animMatrix);
 						}	
 						if (workingPath.getAnchorBottom()) {
 							animMatrix.reset();
-							animMatrix.postTranslate(0, excessHeight);
+							animMatrix.postTranslate(0, remainderHeight);
 							workingPath.transform(animMatrix);
 						}	
-						if (workingPath.getStretchToExcessWidth()) {
+						if (workingPath.getStretchToRemainderWidth()) {
 							RectF bounds = new RectF();
 							workingPath.computeBounds(bounds, false);
 							animMatrix.reset();
-							animMatrix.setScale((bounds.right - bounds.left + excessWidth) / (bounds.right - bounds.left), 1, bounds.left, 0);
+							animMatrix.setScale((bounds.right - bounds.left + remainderWidth) / (bounds.right - bounds.left), 1, bounds.left, 0);
 							workingPath.transform(animMatrix);							
 						}
-						if (workingPath.getStretchToExcessHeight()) {
+						if (workingPath.getStretchToRemainderHeight()) {
 							RectF bounds = new RectF();
 							workingPath.computeBounds(bounds, false);
 							animMatrix.reset();
-							animMatrix.setScale(1, (bounds.bottom - bounds.top + excessHeight) / (bounds.bottom - bounds.top), 0, bounds.top);
+							animMatrix.setScale(1, (bounds.bottom - bounds.top + remainderHeight) / (bounds.bottom - bounds.top), 0, bounds.top);
 							workingPath.transform(animMatrix);
 						}
 					}		

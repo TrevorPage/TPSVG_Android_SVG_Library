@@ -35,8 +35,8 @@ public class ParsedAttributes {
 	public boolean anchorRight;
 	public boolean anchorBottom;
 	
-	public boolean stretchToExcessWidth;
-	public boolean stretchToExcessHeight;
+	public boolean stretchToRemainderWidth;
+	public boolean stretchToRemainderHeight;
 	
 	public ParsedAttributes() {
     	transformData = null;
@@ -44,7 +44,7 @@ public class ParsedAttributes {
     	id = "";
     	anchorRight = false;
     	anchorBottom = false;
-    	stretchToExcessWidth = false;
-    	stretchToExcessHeight = false;
+    	stretchToRemainderWidth = false;
+    	stretchToRemainderHeight = false;
 	}
 }
