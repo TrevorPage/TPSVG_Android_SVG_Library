@@ -13,7 +13,8 @@ public class ParsedAttributes {
 	public float y2;
 	public float cx;
 	public float cy;
-	
+	public float fx;
+	public float fy;
 	public float rx;
 	public float ry;
 	
@@ -37,6 +38,7 @@ public class ParsedAttributes {
 	
 	public boolean stretchToRemainderWidth;
 	public boolean stretchToRemainderHeight;
+	public String offset;
 	
 	public ParsedAttributes() {
     	transformData = null;

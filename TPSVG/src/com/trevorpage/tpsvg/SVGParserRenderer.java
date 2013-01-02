@@ -37,6 +37,7 @@ import org.xml.sax.XMLReader;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
+import com.trevorpage.tpsvg.internal.Gradient;
 import com.trevorpage.tpsvg.internal.ParsedAttributes;
 import com.trevorpage.tpsvg.internal.PatternFill;
 import com.trevorpage.tpsvg.internal.SVGPath;
@@ -104,6 +105,7 @@ public class SVGParserRenderer extends DefaultHandler {
 		stroke_opacity,
 		stroke_width,	
 		text_align,
+		offset,
 		points,
 		viewBox,
 		novalue;
@@ -483,6 +485,14 @@ public class SVGParserRenderer extends DefaultHandler {
     				mParsedAttributes.radius = parseCoOrdinate(value);  
     				break;    	
 
+    			case fx:
+    				mParsedAttributes.fx = parseCoOrdinate(value);
+    				break;
+
+    			case fy:
+    				mParsedAttributes.fy = parseCoOrdinate(value);
+    				break;
+    				
     			case rx:
     				mParsedAttributes.rx = parseCoOrdinate(value);  
     				break;    	
@@ -579,6 +589,10 @@ public class SVGParserRenderer extends DefaultHandler {
 		        	mParsedAttributes.svgStyle.masterOpacity = parseAttrValueFloat(value);
 		        	mParsedAttributes.svgStyle.fillPaint.setAlpha((int)(mParsedAttributes.svgStyle.masterOpacity * mParsedAttributes.svgStyle.fillOpacity * 255));
 		        	mParsedAttributes.svgStyle.strokePaint.setAlpha((int)(mParsedAttributes.svgStyle.masterOpacity * mParsedAttributes.svgStyle.strokeOpacity * 255));		        	
+		        	break;
+		        	
+		        case offset:
+		        	mParsedAttributes.offset = value;
 		        	break;
 					
 		        case fill_opacity:
@@ -754,7 +768,8 @@ public class SVGParserRenderer extends DefaultHandler {
     	g.cx = mParsedAttributes.cx;
     	g.cy = mParsedAttributes.cy;
     	g.radius = mParsedAttributes.radius;
-    	
+    	g.fx = mParsedAttributes.fx;
+    	g.fy = mParsedAttributes.fy;
     	
     	// Best way to deal with xlink might be to do an entire copy of the referenced
     	// Gradient first, and then apply over the top any properties that are 
@@ -857,46 +872,46 @@ public class SVGParserRenderer extends DefaultHandler {
      */
     private void completeXLinks(){
     	// Process the gradients
-    	Iterator<Gradient>gi = gradientList.iterator();
-    	Gradient g; 
+    	Iterator<Gradient> gradientItr = gradientList.iterator();
+    	Gradient gradient; 
     	int idx;
-    	while(gi.hasNext()){
-    		g=gi.next();
-    		if(g.href!=null){
-    			idx = this.getGradientByIdString(g.href.substring(1));
-        		if(idx!=-1){
+    	while (gradientItr.hasNext()) {
+    		gradient = gradientItr.next();
+    		if (gradient.href != null) {
+    			idx = this.getGradientByIdString(gradient.href.substring(1));
+        		if (idx != -1) {
         			Gradient xlinkGrad = this.gradientList.get(idx);
-        			g.stopColours = xlinkGrad.stopColours;
+        			gradient.stopColors = xlinkGrad.stopColors;
         			
         		}    			
-    		
-	    		
+ 
 	    		// TODO: Can't we just insert an object reference to the same shader?
 	    		
-	    		int[] ia = new int[g.stopColours.size()];
-	    		    
-	    		for (int i=0; i<ia.length; i++) {
-	    			ia[i] = g.stopColours.get(i);
+	    		int[] colors = new int[gradient.stopColors.size()];
+	    		float[] offsets = new float[gradient.stopColors.size()];    
+	    		for (int i=0; i<colors.length; i++) {
+	    			colors[i] = gradient.stopColors.get(i).color;
+	    			offsets[i] = gradient.stopColors.get(i).offset;
 	    		}  
 	    		
-				if(g.isRadial){
-			    	g.shader = new RadialGradient(
-			        		g.cx,
-			        		g.cy,
-			        		g.radius,
-			        		ia,
-			        		null,
+				if(gradient.isRadial){
+			    	gradient.shader = new RadialGradient(
+			        		gradient.cx,
+			        		gradient.cy,
+			        		gradient.radius,
+			        		colors,
+			        		offsets,
 			        		Shader.TileMode.CLAMP
 			        		);          				
 				}
 				else{ // linear
-			    	g.shader = new LinearGradient(
-			        		g.x1,
-			        		g.y1,
-			        		g.x2,
-			        		g.y2,
-			        		ia,
-			        		null,
+			    	gradient.shader = new LinearGradient(
+			        		gradient.x1,
+			        		gradient.y1,
+			        		gradient.x2,
+			        		gradient.y2,
+			        		colors,
+			        		offsets,
 			        		Shader.TileMode.CLAMP
 			        		);
 				}
@@ -905,11 +920,11 @@ public class SVGParserRenderer extends DefaultHandler {
 				// The shader needs to have a matrix even if no transform was specified in the attributes
 				// for the gradient. This is because the gradient's Matrix, even if 'empty', is needed
 				// to concatenate the current cumulative transform to during evaluation/drawing.
-		    	if(g.matrix != null){
-		    		g.shader.setLocalMatrix(g.matrix);
+		    	if(gradient.matrix != null){
+		    		gradient.shader.setLocalMatrix(gradient.matrix);
 		    	}        			
 		    	else{
-		    		g.shader.setLocalMatrix(new Matrix());
+		    		gradient.shader.setLocalMatrix(new Matrix());
 		    	}	
     		}
     	}    	
@@ -922,11 +937,11 @@ public class SVGParserRenderer extends DefaultHandler {
     	// attributes. If it didn't, then hopefully it references another gradient's colours via a href
     	// attribute, in which case the cross-referencing will be done later. 
         
-    	if(currentGradient.stopColours.size()>0){
-    		int[] ia = new int[currentGradient.stopColours.size()];
+    	if(currentGradient.stopColors.size()>0){
+    		int[] ia = new int[currentGradient.stopColors.size()];
     	    
     		for (int i=0; i<ia.length; i++) {
-    			ia[i] = currentGradient.stopColours.get(i);
+    			ia[i] = currentGradient.stopColors.get(i).color;
     		}  
 
         	currentGradient.shader = new LinearGradient(
@@ -960,50 +975,41 @@ public class SVGParserRenderer extends DefaultHandler {
     
     private void finaliseRadialGradient(){
 
-    	if(currentGradient.stopColours.size()>0){
-        	
-			int[] ia = new int[currentGradient.stopColours.size()];
-		    
-			for (int i=0; i<ia.length; i++) {
-				ia[i] = currentGradient.stopColours.get(i);
-			}  
-	
-		    	currentGradient.shader = new RadialGradient(
-		        		currentGradient.cx,
-		        		currentGradient.cy,
-		        		currentGradient.radius,
-		        		ia,
-		        		null,
-		        		Shader.TileMode.CLAMP
-		        		);      	
-    
-				// The shader needs to have a matrix even if no transform was specified in the attributes
-				// for the gradient. This is because the gradient's Matrix, even if 'empty', is needed
-				// to concatenate the current cumulative transform to during evaluation/drawing.
-		    	if(currentGradient.matrix != null){
-		    		currentGradient.shader.setLocalMatrix(currentGradient.matrix);
-		    	}        			
-		    	else{
-		    		currentGradient.shader.setLocalMatrix(new Matrix());
-		    	}	
-		    	
+    	if (currentGradient.stopColors.size() > 0) {
+			
+    		int[] colors = new int[currentGradient.stopColors.size()];
+    		float[] offsets = new float[currentGradient.stopColors.size()];    
+    		for (int i = 0; i < colors.length; i++) {
+    			colors[i] = currentGradient.stopColors.get(i).color;
+    			offsets[i] = currentGradient.stopColors.get(i).offset;
+    		}  
+
+    		currentGradient.shader = new RadialGradient(
+    				currentGradient.cx,
+    				currentGradient.cy,
+    				currentGradient.radius,
+    				colors,
+    				offsets,
+    				Shader.TileMode.CLAMP
+    				);      	
+
+    		// The shader needs to have a matrix even if no transform was specified in the attributes
+    		// for the gradient. This is because the gradient's Matrix, even if 'empty', is needed
+    		// to concatenate the current cumulative transform to during evaluation/drawing.
+    		if(currentGradient.matrix != null){
+    			currentGradient.shader.setLocalMatrix(currentGradient.matrix);
+    		}        			
+    		else{
+    			currentGradient.shader.setLocalMatrix(new Matrix());
+    		}	
     	}
-	    	
-	    	
-    	
     	currentGradient.isRadial = true;
     	gradientList.add(currentGradient);
     	currentGradient = new Gradient();    	
-
-
-    
     }
     
-    
     private void gradientStop(){
-    	gradientStyle(); // This will add colour to stopColours
-    	
-    	
+    	gradientStyle();  	
     }
     
     /* Search the gradientList for the Gradient with specified string ID. 
@@ -1379,9 +1385,14 @@ public class SVGParserRenderer extends DefaultHandler {
 		parseAttributeValuePairsIntoMap(map);
 		String value;	
 		int stopColour = 0;
+		float stopOffset = 0;
 		boolean haveStopColour = false;
-
-		if( null != ( value = map.get("stop-opacity"))){
+		
+		if (mParsedAttributes.offset != null) {
+			stopOffset = parseAttrValueFloat(mParsedAttributes.offset);
+		}
+		
+		if (null != (value = map.get("stop-opacity"))) {
 			float opacity = parseAttrValueFloat(value);
 			stopColour |= (((int)(opacity*255))<<24);
 			haveStopColour = true;
@@ -1392,17 +1403,14 @@ public class SVGParserRenderer extends DefaultHandler {
 			stopColour = 0xff000000;
 		}
 		
-		if( null != ( value = map.get("stop-color"))){
+		if (null != (value = map.get("stop-color"))) {
 			stopColour |= parseColour(value);	
 			haveStopColour = true;
 		}
 
-
-	
 		if(haveStopColour){
-			currentGradient.stopColours.add(stopColour);
+			currentGradient.stopColors.add(new Gradient.StopColor(stopColour, stopOffset));
 		}
-		
 	}	
 	
 	private void parseAttributeValuePairsIntoMap( Map<String,String> map ){
@@ -1508,19 +1516,17 @@ public class SVGParserRenderer extends DefaultHandler {
 		    	result = 0xff0000;
 		    }	    	
 	    }
-
 	    return result;		
 	}
 	
-	
 	private float parseAttrValueFloat(String value){
-		float f = 0f;
-		try{
-			f = Float.parseFloat(value);
-		}catch(Exception e){
-			
+		float result;
+		try {
+			result = Float.parseFloat(value);
+		} catch(Exception e) {
+			result = 0;
 		}
-		return f;
+		return result;
 	}
 	
 	/**
@@ -2496,42 +2502,7 @@ public class SVGParserRenderer extends DefaultHandler {
 
 	
 	
-	/**
-	 * Class to encapsulate a gradient.
-	 * Alternatively we could have a map of Shader, with the key being the ID. 
-	 * 
-	 * A Gradient object is made up in several stages: initially a Gradient is created
-	 * and used to store any information from attributes within the <linearGradient> or
-	 * <radialGradient> start tag. We may then have child elements such as <stop> which add
-	 * further information like stop colours to the current gradient. 
-	 * 
-	 */
-	
-	private class Gradient{
-	
-		boolean isRadial = false;
-		Shader shader;
-		Matrix matrix;
-		String id;
-		float x1,y1,x2,y2,cx,cy,radius;
-		String href = null;
-		
-		
-		// Using a simple array might be better
-		ArrayList<Integer> stopColours = new ArrayList<Integer>(); // Could be a member of Gradient
-		
-		public Gradient(){
-			
-		}
-			
-		public void setCoordinates(float x1, float y1, float x2, float y2){
-			this.x1 = x1;
-			this.y1 = y1;
-			this.x2 = x2;
-			this.y2 = y2;
-		}
-		
-	}
+
 	
 	/**
 	 * Represents a single line of text. Encapsulates data parsed from the SVG file needed
