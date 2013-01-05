@@ -2190,10 +2190,10 @@ public class SVGParserRenderer extends DefaultHandler {
 					}		
 				
 					shaderMatrix = null; 
-					if(currentFillPaint != null) {
+					if (currentFillPaint != null) {
 	
 						Matrix copyShaderMatrix = null;
-						if(currentFillPaint.getShader()!=null){
+						if (currentFillPaint.getShader() != null) {
 							shaderMatrix = new Matrix();
 							currentFillPaint.getShader().getLocalMatrix(shaderMatrix);
 							copyShaderMatrix = new Matrix(shaderMatrix); // Deep copy. 
@@ -2236,6 +2236,11 @@ public class SVGParserRenderer extends DefaultHandler {
 						if (!mSkipPattern) {
 							mCanvas.drawPath(workingPath, currentStrokePaint);	
 						}
+						
+						if (shaderMatrix != null) {
+							currentStrokePaint.getShader().setLocalMatrix(shaderMatrix); // Restore shader's original Matrix 
+						}
+						
 						currentStrokePaint.setStrokeWidth(storedStrokeWidth);			
 					}
 									
