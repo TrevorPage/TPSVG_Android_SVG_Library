@@ -2029,17 +2029,51 @@ public class SVGParserRenderer extends DefaultHandler {
 	public void paintImage(Canvas canvas, String subtreeId, View view, ITpsvgController animHandler ) {
 		paintImage(canvas, subtreeId, view, animHandler, false);
 	}
-
+	
 	public void paintImage(Canvas canvas, String subtreeId, View view, ITpsvgController animHandler, boolean fill) {
+		paintImage(canvas, subtreeId, view, animHandler, fill, 0);
+	}
+
+	public void paintImage(Canvas canvas, String subtreeId, View view, ITpsvgController animHandler, boolean fill, int rotation) {
 		float uniformScaleFactor;
+		canvas.save();
+		
 		if (fill)
 			uniformScaleFactor = Math.max(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
 		else
 			uniformScaleFactor = Math.min(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
-		float remainderHeight = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
-		float remainderWidth = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+		float remainderHeight;
+		float remainderWidth;
+	
 		canvas.scale(uniformScaleFactor, uniformScaleFactor);
-		paintImage(canvas, subtreeId, remainderWidth, remainderHeight, animHandler, fill, false);	
+		
+		switch (rotation) {
+			case 90:
+				canvas.rotate(90, 0, 0);
+				canvas.translate(0, -mRootSvgHeight);
+				remainderWidth = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
+				remainderHeight = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+				break;
+			case 180:
+				canvas.rotate(180, 0, 0);
+				canvas.translate(-mRootSvgWidth, -mRootSvgHeight);
+				remainderHeight = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
+				remainderWidth = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+				break;
+			case 270:
+				canvas.rotate(270, 0, 0);
+				canvas.translate(-mRootSvgWidth, 0);
+				remainderWidth = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
+				remainderHeight = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+				break;
+			default:
+				remainderHeight = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
+				remainderWidth = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+				break;
+		}
+		
+		paintImage(canvas, subtreeId, remainderWidth, remainderHeight, rotation, animHandler, false);	
+		canvas.restore();
 	}
 		
 	/**
@@ -2056,16 +2090,18 @@ public class SVGParserRenderer extends DefaultHandler {
 	 * of a &lt;g&gt; group element. Pass null to render entire image. 
 	 * @param remainderWidth In terms of SVG document width units, the amount of additional width available in the container. 
 	 * @param remainderHeight In terms of SVG document width units, the amount of additional height available in the container. 
+	 * @param rotation Rotation in degrees. This parameter is passed to the renderer (rather than simply
+	 * rotating the Canvas beforehand) because it is used also for paths that are conditionally shown
+	 * depending on rotation.
 	 * @param animHandler Animation callback handler
-	 * @param fill
 	 * @param isDrawingPatternTile Normally should be false. Set to true if the call is being
 	 * made specifically for drawing a single pattern tile, usually during the creation of an
 	 * SVGPatternShader. In this case the subtreeId would be the ID of the &lt;pattern&gt; element.
 	 * The result is that the vector data inside the &lt;pattern&gt; element is drawn to Canvas
 	 * as if it were regular image data. 
 	 */
-	void paintImage(Canvas canvas, String subtreeId, float remainderWidth, float remainderHeight, 
-			ITpsvgController animHandler, boolean fill, boolean isDrawingPatternTile) {		
+	void paintImage(Canvas canvas, String subtreeId, float remainderWidth, float remainderHeight, int rotation, 
+			ITpsvgController animHandler, boolean isDrawingPatternTile) {		
 
 		Canvas mCanvas = canvas;
 		SVGPath workingPath = new SVGPath();
