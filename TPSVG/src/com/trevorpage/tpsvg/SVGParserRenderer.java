@@ -2143,6 +2143,32 @@ public class SVGParserRenderer extends DefaultHandler {
 				animId = null;
 				animIteration = 0;
 				
+				animMatrix.reset();
+				
+				if (workingPath.usesRemainderWidthOrHeight()) {
+					if (workingPath.getAnchorRight()) {
+						animMatrix.postTranslate(remainderWidth, 0);
+						workingPath.transform(animMatrix);
+					}	
+					if (workingPath.getAnchorBottom()) {
+						animMatrix.postTranslate(0, remainderHeight);
+						workingPath.transform(animMatrix);
+					}	
+					if (workingPath.getStretchToRemainderWidth()) {
+						RectF bounds = new RectF();
+						workingPath.computeBounds(bounds, false);
+						animMatrix.setScale((bounds.right - bounds.left + remainderWidth) / (bounds.right - bounds.left), 1, bounds.left, 0);
+						workingPath.transform(animMatrix);							
+					}
+					if (workingPath.getStretchToRemainderHeight()) {
+						RectF bounds = new RectF();
+						workingPath.computeBounds(bounds, false);
+						animMatrix.setScale(1, (bounds.bottom - bounds.top + remainderHeight) / (bounds.bottom - bounds.top), 0, bounds.top);
+						workingPath.transform(animMatrix);
+					}
+				}		
+				
+				
 				do {
 					
 					if (doSpecialIdCallbackForNextElement == true) {
@@ -2162,32 +2188,6 @@ public class SVGParserRenderer extends DefaultHandler {
 						}
 					}
 					
-					if (workingPath.usesRemainderWidthOrHeight()) {
-						if (workingPath.getAnchorRight()) {
-							animMatrix.reset();
-							animMatrix.postTranslate(remainderWidth, 0);
-							workingPath.transform(animMatrix);
-						}	
-						if (workingPath.getAnchorBottom()) {
-							animMatrix.reset();
-							animMatrix.postTranslate(0, remainderHeight);
-							workingPath.transform(animMatrix);
-						}	
-						if (workingPath.getStretchToRemainderWidth()) {
-							RectF bounds = new RectF();
-							workingPath.computeBounds(bounds, false);
-							animMatrix.reset();
-							animMatrix.setScale((bounds.right - bounds.left + remainderWidth) / (bounds.right - bounds.left), 1, bounds.left, 0);
-							workingPath.transform(animMatrix);							
-						}
-						if (workingPath.getStretchToRemainderHeight()) {
-							RectF bounds = new RectF();
-							workingPath.computeBounds(bounds, false);
-							animMatrix.reset();
-							animMatrix.setScale(1, (bounds.bottom - bounds.top + remainderHeight) / (bounds.bottom - bounds.top), 0, bounds.top);
-							workingPath.transform(animMatrix);
-						}
-					}		
 				
 					shaderMatrix = null; 
 					if (currentFillPaint != null) {
@@ -2198,6 +2198,7 @@ public class SVGParserRenderer extends DefaultHandler {
 							currentFillPaint.getShader().getLocalMatrix(shaderMatrix);
 							copyShaderMatrix = new Matrix(shaderMatrix); // Deep copy. 
 							copyShaderMatrix.postConcat(workingMatrix );
+							copyShaderMatrix.postConcat(animMatrix);
 							currentFillPaint.getShader().setLocalMatrix(copyShaderMatrix);
 						}
 						if (!mSkipPattern) {
@@ -2230,6 +2231,7 @@ public class SVGParserRenderer extends DefaultHandler {
 							currentStrokePaint.getShader().getLocalMatrix(shaderMatrix);
 							copyShaderMatrix = new Matrix(shaderMatrix); // Deep copy. 
 							copyShaderMatrix.postConcat(workingMatrix);
+							copyShaderMatrix.postConcat(animMatrix);
 							currentStrokePaint.getShader().setLocalMatrix(copyShaderMatrix);
 						}
 						
