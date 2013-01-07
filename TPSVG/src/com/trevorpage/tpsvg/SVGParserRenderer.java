@@ -2023,8 +2023,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	
 	float[] matrixValues = new float[9];
 	
-	// ------------------------------------------------------------------------------
-	// Code Evaluator
+
 	
 	public void paintImage(Canvas canvas, String subtreeId, View view, ITpsvgController animHandler ) {
 		paintImage(canvas, subtreeId, view, animHandler, false);
@@ -2038,37 +2037,42 @@ public class SVGParserRenderer extends DefaultHandler {
 		float uniformScaleFactor;
 		canvas.save();
 		
-		if (fill)
-			uniformScaleFactor = Math.max(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
-		else
-			uniformScaleFactor = Math.min(view.getWidth() / mRootSvgWidth, view.getHeight() / mRootSvgHeight);
+		int containerHeight = view.getHeight();
+		int containerWidth = view.getWidth();
+		
+		if (rotation == 90 || rotation == 270) {
+			int temp = containerWidth;
+			containerWidth = containerHeight;
+			containerHeight = temp;
+		}
+		
+		if (fill) {
+			uniformScaleFactor = Math.max(containerWidth / mRootSvgWidth, containerHeight / mRootSvgHeight);
+		}
+		else {
+			uniformScaleFactor = Math.min(containerWidth / mRootSvgWidth, containerHeight / mRootSvgHeight);
+		}
+		
 		float remainderHeight;
 		float remainderWidth;
-	
+		remainderHeight = (containerHeight / uniformScaleFactor) - mRootSvgHeight;
+		remainderWidth = (containerWidth / uniformScaleFactor) - mRootSvgWidth;
 		canvas.scale(uniformScaleFactor, uniformScaleFactor);
 		
 		switch (rotation) {
 			case 90:
 				canvas.rotate(90, 0, 0);
-				canvas.translate(0, -mRootSvgHeight);
-				remainderWidth = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
-				remainderHeight = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+				canvas.translate(0, -mRootSvgHeight - remainderHeight);
 				break;
 			case 180:
 				canvas.rotate(180, 0, 0);
-				canvas.translate(-mRootSvgWidth, -mRootSvgHeight);
-				remainderHeight = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
-				remainderWidth = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+				canvas.translate(-mRootSvgWidth - remainderWidth, -mRootSvgHeight - remainderHeight);
 				break;
 			case 270:
 				canvas.rotate(270, 0, 0);
-				canvas.translate(-mRootSvgWidth, 0);
-				remainderWidth = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
-				remainderHeight = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
+				canvas.translate(-mRootSvgWidth - remainderWidth, 0);
 				break;
 			default:
-				remainderHeight = (view.getHeight() / uniformScaleFactor) - mRootSvgHeight;
-				remainderWidth = (view.getWidth() / uniformScaleFactor) - mRootSvgWidth;
 				break;
 		}
 		
