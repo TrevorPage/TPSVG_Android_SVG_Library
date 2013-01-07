@@ -1,5 +1,7 @@
 package com.trevorpage.tpsvg.internal;
 
+import java.util.ArrayList;
+
 import android.graphics.Matrix;
 import android.graphics.Path;
 
@@ -13,6 +15,7 @@ public class SVGPath extends Path {
 	private boolean mAnchorBottom;
 	private boolean mStretchToRemainderWidth;
 	private boolean mStretchToRemainderHeight;
+	protected ArrayList<Integer> mVisibleOnRotations;
 	
 	public SVGPath() {
 		super();
@@ -29,6 +32,7 @@ public class SVGPath extends Path {
 		mAnchorBottom = false;
 		mStretchToRemainderWidth = false;
 		mStretchToRemainderHeight = false;
+		mVisibleOnRotations = null;
 	}
 	
 	public void rewind() {
@@ -106,6 +110,22 @@ public class SVGPath extends Path {
 			if (((SVGPath)src).getStretchToRemainderHeight()) {
 				setStretchToRemainderHeight(true);
 			}
+			if (((SVGPath)src).mVisibleOnRotations != null) {
+				addVisibleOnRotations(((SVGPath)src).mVisibleOnRotations);
+			}
 		}
+	}
+	
+	public void addVisibleOnRotations(ArrayList<Integer> rotations) {
+		if (rotations != null && rotations.size() > 0) {
+			if (mVisibleOnRotations == null) {
+				mVisibleOnRotations = new ArrayList<Integer>();
+			}
+			mVisibleOnRotations.addAll(rotations);	
+		}
+	}
+	
+	public boolean getVisibleOnRotation(int rotation) {
+		return mVisibleOnRotations == null ? true : mVisibleOnRotations.contains(rotation);
 	}
 }

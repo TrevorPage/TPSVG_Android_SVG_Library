@@ -126,6 +126,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	private enum CustomAttributes {
 		anchor,
 		stretch_to_remainder,
+		visible_on_rotation,
 		novalue;
 		
 	    public static CustomAttributes toAttr(String str) {
@@ -416,6 +417,7 @@ public class SVGParserRenderer extends DefaultHandler {
        	mParsedAttributes.anchorBottom = false;
        	mParsedAttributes.stretchToRemainderWidth = false;
        	mParsedAttributes.stretchToRemainderWidth = false;
+       	mParsedAttributes.rotations = new ArrayList<Integer>();
        	// It is important to reset co-ordinates to zero because I've seen some elements (produced by Illustrator) that
        	// omit co-ordinates (implying 0,0 or top left) and use a transform to actually place the element. 
        	mParsedAttributes.x = 0;
@@ -682,6 +684,15 @@ public class SVGParserRenderer extends DefaultHandler {
 	    		value = value.toLowerCase();
 	    		mParsedAttributes.stretchToRemainderHeight = value.contains("height") ? true : false;
 	    		mParsedAttributes.stretchToRemainderWidth = value.contains("width") ? true : false;
+	    		break;
+	    		
+	    	case visible_on_rotation:
+				PathTokenizer t = new PathTokenizer();
+				String valueCopy = value;
+				while (t.getToken(valueCopy) == PathTokenizer.LTOK_NUMBER) {
+					valueCopy = null;
+					mParsedAttributes.rotations.add(Math.round(t.tokenF));
+				}		
 	    		break;
 	    		
     		default:
@@ -1063,6 +1074,7 @@ public class SVGParserRenderer extends DefaultHandler {
 		path.setAnchorBottom(mParsedAttributes.anchorBottom);
 		path.setStretchToRemainderWidth(mParsedAttributes.stretchToRemainderWidth);
 		path.setStretchToRemainderHeight(mParsedAttributes.stretchToRemainderHeight);
+		path.addVisibleOnRotations(mParsedAttributes.rotations);
 	}
 	
 	private void text_element() {
@@ -2241,7 +2253,7 @@ public class SVGParserRenderer extends DefaultHandler {
 							copyShaderMatrix.postConcat(animMatrix);
 							currentFillPaint.getShader().setLocalMatrix(copyShaderMatrix);
 						}
-						if (!mSkipPattern) {
+						if (!mSkipPattern && workingPath.getVisibleOnRotation(rotation)) {
 							mCanvas.drawPath(workingPath, currentFillPaint);
 						}
 						if(shaderMatrix != null){
@@ -2275,7 +2287,7 @@ public class SVGParserRenderer extends DefaultHandler {
 							currentStrokePaint.getShader().setLocalMatrix(copyShaderMatrix);
 						}
 						
-						if (!mSkipPattern) {
+						if (!mSkipPattern && workingPath.getVisibleOnRotation(rotation)) {
 							mCanvas.drawPath(workingPath, currentStrokePaint);	
 						}
 						

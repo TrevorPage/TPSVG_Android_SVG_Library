@@ -1,5 +1,7 @@
 package com.trevorpage.tpsvg.internal;
 
+import java.util.ArrayList;
+
 import com.trevorpage.tpsvg.SVGParserRenderer.SvgStyle;
 
 public class ParsedAttributes {
@@ -40,6 +42,8 @@ public class ParsedAttributes {
 	public boolean stretchToRemainderHeight;
 	public String offset;
 	
+	public ArrayList<Integer> rotations;
+	
 	public ParsedAttributes() {
     	transformData = null;
     	styleData = null;
@@ -48,5 +52,6 @@ public class ParsedAttributes {
     	anchorBottom = false;
     	stretchToRemainderWidth = false;
     	stretchToRemainderHeight = false;
+    	rotations = new ArrayList<Integer>();
 	}
 }
