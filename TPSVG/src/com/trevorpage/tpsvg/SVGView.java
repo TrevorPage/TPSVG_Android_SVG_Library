@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.View;
 
 public class SVGView extends View  {
@@ -41,12 +40,43 @@ public class SVGView extends View  {
 		init(context);
 	}
 	
+	/**
+	 * Set fill mode.
+	 * @param fill fill mode
+	 */
 	public void setFill(boolean fill) {
 		mFill = fill;
 	}
 	
+	/**
+	 * Get fill mode.
+	 * @return fill mode
+	 */
 	public boolean getFill() {
 		return mFill;
+	}
+	
+	/**
+	 * Set the orientation value in degrees to be applied during SVG rendering.
+	 * The supplied orientation should be only a multiple of 90 degrees (0, 90, 180, or 270).
+	 * This is implemented despite existing View getRotation/setRotation methods because
+	 * at present the SVG renderer automatically sets the rotation pivot point and, importantly,
+	 * also correctly manipulates the remainder width / remainder height so that special 
+	 * anchor and stretch attributes still work, but can only presently do this at 90 degree
+	 * multiples. At a later stage it might be adapted to cope with all rotations and 
+	 * therefore the existing View float rotation methods can be used.
+	 * @param rotation in degrees
+	 */
+	public void setOrientation(int rotation) {
+		mRotation = rotation;
+	}
+	
+	/**
+	 * Get the orientation value in degrees. Refer to {@link setOrientation}.
+	 * @return rotation in degrees
+	 */
+	public int getOrientation() {
+		return mRotation;
 	}
 
 	
@@ -126,7 +156,6 @@ public class SVGView extends View  {
 	public void setSubtree(String subtreeId) {
 		subtree = subtreeId;
 	}
-	
 
 	@Override
 	protected void onDraw(Canvas canvas) {
@@ -135,27 +164,16 @@ public class SVGView extends View  {
 	    	mRenderBitmap = Bitmap.createBitmap(getMeasuredWidth(), getMeasuredHeight(), Bitmap.Config.ARGB_8888);     	
 	    	mEntireRedrawNeeded = true;
 	    	mCanvas = new Canvas(mRenderBitmap);
-	    	//mCanvas.rotate(degrees, px, py)
 		}	
 	    
 	    if (mEntireRedrawNeeded) {
 	    	mEntireRedrawNeeded = false;
 	    	mRenderBitmap.eraseColor(android.graphics.Color.TRANSPARENT);
-	    	Canvas c = new Canvas(mRenderBitmap);
-	    	
-	    	// hacky rotation idea test
-	    	/*
-	    	if (getWidth() != getHeight() && mRotation == 1) {
-		    	c.rotate(90, getWidth() / 2, getHeight() / 2);
-		    	c.scale(getWidth() / getHeight(), getHeight() / getWidth(), getWidth() / 2, getHeight() / 2);	
-	    	}
-	    	*/
-	    	
-	    	mSvgImage.paintImage(c, subtree, this, mController, mFill );
+	    	Canvas c = new Canvas(mRenderBitmap);	    	
+	    	mSvgImage.paintImage(c, subtree, this, mController, mFill, mRotation );
 	    }
 	    
-		canvas.drawBitmap(mRenderBitmap, 0f, 0f, mDrawPaint );
-		
+		canvas.drawBitmap(mRenderBitmap, 0f, 0f, mDrawPaint );		
 	}
 
 	
