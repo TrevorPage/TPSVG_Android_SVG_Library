@@ -1133,6 +1133,7 @@ public class SVGParserRenderer extends DefaultHandler {
 		// be done using PathMeasure, but that seems expensive.)
 		float segmentStartX = 0;
 		float segmentStartY = 0;
+		boolean segmentStart = true;
 		do {
 			if (t.currentTok == PathTokenizer.LTOK_LETTER) {
 				currentCommandLetter = t.tokenChar;
@@ -1164,6 +1165,11 @@ public class SVGParserRenderer extends DefaultHandler {
 				} else {
 					currentCommandLetter = 'l';
 				}
+				if (segmentStart) {
+					segmentStartX = mCurrentX;
+					segmentStartY = mCurrentY;
+					segmentStart = false;
+				}
 				break;
 
 			case 'L':
@@ -1178,6 +1184,11 @@ public class SVGParserRenderer extends DefaultHandler {
 				path.lineTo(x, y);
 				mCurrentX = x;
 				mCurrentY = y;
+				if (segmentStart) {
+					segmentStartX = mCurrentX;
+					segmentStartY = mCurrentY;
+					segmentStart = false;
+				}
 				break;
 
 			case 'H':
@@ -1188,6 +1199,11 @@ public class SVGParserRenderer extends DefaultHandler {
 				}
 				path.lineTo(x, mCurrentY);
 				mCurrentX = x;
+				if (segmentStart) {
+					segmentStartX = mCurrentX;
+					segmentStartY = mCurrentY;
+					segmentStart = false;
+				}
 				break;
 
 			case 'V':
@@ -1198,6 +1214,11 @@ public class SVGParserRenderer extends DefaultHandler {
 				}
 				path.lineTo(mCurrentX, y);
 				mCurrentY = y;
+				if (segmentStart) {
+					segmentStartX = mCurrentX;
+					segmentStartY = mCurrentY;
+					segmentStart = false;
+				}
 				break;
 
 			case 'z':
@@ -1208,6 +1229,7 @@ public class SVGParserRenderer extends DefaultHandler {
 				// begins after a 'z' command) occurs at the right co-ordinates.
 				mCurrentX = segmentStartX;
 				mCurrentY = segmentStartY;
+				segmentStart = true;
 				carry = true;
 				break;
 
@@ -1234,6 +1256,11 @@ public class SVGParserRenderer extends DefaultHandler {
 						sweep_flag, x, y);
 				mCurrentX = x;
 				mCurrentY = y;
+				if (segmentStart) {
+					segmentStartX = mCurrentX;
+					segmentStartY = mCurrentY;
+					segmentStart = false;
+				}
 				break;
 
 			case 'C':
@@ -1265,6 +1292,11 @@ public class SVGParserRenderer extends DefaultHandler {
 				mLastControlPointY = y2;
 				mCurrentX = x;
 				mCurrentY = y;
+				if (segmentStart) {
+					segmentStartX = mCurrentX;
+					segmentStartY = mCurrentY;
+					segmentStart = false;
+				}
 				break;
 
 			case 'S':
@@ -1289,6 +1321,11 @@ public class SVGParserRenderer extends DefaultHandler {
 				path.cubicTo(x1, y1, x2, y2, x, y);
 				mCurrentX = x;
 				mCurrentY = y;
+				if (segmentStart) {
+					segmentStartX = mCurrentX;
+					segmentStartY = mCurrentY;
+					segmentStart = false;
+				}
 				break;
 
 			case 'Q':
@@ -1307,10 +1344,6 @@ public class SVGParserRenderer extends DefaultHandler {
 
 			}
 
-			if (firstElement == true) {
-				segmentStartX = mCurrentX;
-				segmentStartY = mCurrentY;
-			}
 			firstElement = false;
 			if (!carry)
 				t.getToken(null);
