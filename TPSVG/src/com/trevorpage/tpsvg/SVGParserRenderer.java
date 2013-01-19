@@ -1121,11 +1121,15 @@ public class SVGParserRenderer extends DefaultHandler {
 		t.getToken(mParsedAttributes.pathData);
 		SVGPath path = new SVGPath();
 		char currentCommandLetter = '?';
-		// The segmentStartX and segmentStartY record the start position of the 
-		// current segment being drawn in the Path. The segment start position is 
-		// needed should a 'z' (close path) be immediately followed by a relative
-		// command to begin a next segment. (The Path class doesn't seem to provide
-		// a way to determine the current position after calling close(). It could
+		// The segmentStartX and segmentStartY record the start position of the
+		// current segment being drawn in the Path. The segment start position
+		// is
+		// needed should a 'z' (close path) be immediately followed by a
+		// relative
+		// command to begin a next segment. (The Path class doesn't seem to
+		// provide
+		// a way to determine the current position after calling close(). It
+		// could
 		// be done using PathMeasure, but that seems expensive.)
 		float segmentStartX = 0;
 		float segmentStartY = 0;
@@ -1354,6 +1358,13 @@ public class SVGParserRenderer extends DefaultHandler {
 			t.getToken(mParsedAttributes.transformData);
 			do {
 				if (t.currentTok == ValueTokenizer.LTOK_STRING) {
+					if (t.tokenStr.equalsIgnoreCase("scale")) {
+						t.getToken(null);
+						f1 = t.tokenF;
+						t.getToken(null);
+						f2 = t.tokenF;
+						m.postScale(f1, f2);
+					}
 
 					if (t.tokenStr.equalsIgnoreCase("translate")) {
 						t.getToken(null);
