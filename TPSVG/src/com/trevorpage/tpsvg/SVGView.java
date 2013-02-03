@@ -124,7 +124,7 @@ public class SVGView extends View {
 	private void init(Context context) {
 		setDrawingCacheEnabled(false);
 		mDrawPaint.setAntiAlias(false);
-		mDrawPaint.setFilterBitmap(false);
+		mDrawPaint.setFilterBitmap(true);
 		mDrawPaint.setDither(false);
 		mRotation = context.getResources().getConfiguration().orientation;
 	}
@@ -175,8 +175,8 @@ public class SVGView extends View {
 			mEntireRedrawNeeded = false;
 			mRenderBitmap.eraseColor(android.graphics.Color.TRANSPARENT);
 			Canvas c = new Canvas(mRenderBitmap);
-			mSvgImage.paintImage(c, subtree, this, mController, mFill,
-					mRotation);
+			mSvgImage.paintImage(c, subtree, getWidth(), getHeight(),
+					mController, mFill, mRotation);
 		}
 
 		canvas.drawBitmap(mRenderBitmap, 0f, 0f, mDrawPaint);

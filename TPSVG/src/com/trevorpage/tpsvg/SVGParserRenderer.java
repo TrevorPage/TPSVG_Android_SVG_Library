@@ -652,8 +652,15 @@ public class SVGParserRenderer extends DefaultHandler {
 				break;
 
 			case stroke_width:
-				mParsedAttributes.svgStyle.strokePaint
-						.setStrokeWidth(parseCoOrdinate(value));
+				float width = parseCoOrdinate(value);
+				// .setStrokeWidth doesn't seem to deal in px directly; there
+				// seems to be scaling of 1.5 applied, and this doesn't seem
+				// to depend on screen density. Compensate for it, otherwise
+				// wide stroke widths appear much too thick. 
+				if (width > 0) {
+					width /= 1.5;
+				}
+				mParsedAttributes.svgStyle.strokePaint.setStrokeWidth(width);
 				break;
 
 			case points:
@@ -2166,23 +2173,23 @@ public class SVGParserRenderer extends DefaultHandler {
 
 	float[] matrixValues = new float[9];
 
-	public void paintImage(Canvas canvas, String subtreeId, View view,
-			ITpsvgController animHandler) {
-		paintImage(canvas, subtreeId, view, animHandler, false);
+	public void paintImage(Canvas canvas, String subtreeId, int containerWidth,
+			int containerHeight, ITpsvgController animHandler) {
+		paintImage(canvas, subtreeId, containerWidth, containerHeight,
+				animHandler, false);
 	}
 
-	public void paintImage(Canvas canvas, String subtreeId, View view,
-			ITpsvgController animHandler, boolean fill) {
-		paintImage(canvas, subtreeId, view, animHandler, fill, 0);
+	public void paintImage(Canvas canvas, String subtreeId, int containerWidth,
+			int containerHeight, ITpsvgController animHandler, boolean fill) {
+		paintImage(canvas, subtreeId, containerWidth, containerHeight,
+				animHandler, fill, 0);
 	}
 
-	public void paintImage(Canvas canvas, String subtreeId, View view,
-			ITpsvgController animHandler, boolean fill, int rotation) {
+	public void paintImage(Canvas canvas, String subtreeId, int containerWidth,
+			int containerHeight, ITpsvgController animHandler, boolean fill,
+			int rotation) {
 		float uniformScaleFactor;
 		canvas.save();
-
-		int containerHeight = view.getHeight();
-		int containerWidth = view.getWidth();
 
 		if (rotation == 90 || rotation == 270) {
 			int temp = containerWidth;
@@ -2267,9 +2274,9 @@ public class SVGParserRenderer extends DefaultHandler {
 	 *            result is that the vector data inside the &lt;pattern&gt;
 	 *            element is drawn to Canvas as if it were regular image data.
 	 */
-	void paintImage(Canvas canvas, String subtreeId, float remainderWidth,
-			float remainderHeight, int rotation, ITpsvgController animHandler,
-			boolean isDrawingPatternTile) {
+	public void paintImage(Canvas canvas, String subtreeId,
+			float remainderWidth, float remainderHeight, int rotation,
+			ITpsvgController animHandler, boolean isDrawingPatternTile) {
 
 		Canvas mCanvas = canvas;
 		SVGPath workingPath = new SVGPath();
