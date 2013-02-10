@@ -100,19 +100,66 @@ public class SVGView extends View {
 		int heightMode = MeasureSpec.getMode(heightMeasureSpec);
 		int heightSize = MeasureSpec.getSize(heightMeasureSpec);
 
-		int chosenWidth = chooseDimension(widthMode, widthSize);
-		int chosenHeight = chooseDimension(heightMode, heightSize);
+		int chosenWidth;
+		int chosenHeight;
+
+		if (heightMode == MeasureSpec.AT_MOST
+				&& widthMode == MeasureSpec.EXACTLY) {
+			// Usually the case if height is MATCH_PARENT and the width is
+			// WRAP_CONTENT
+			chosenWidth = widthSize;
+			chosenHeight = (int) (mSvgImage.getDocumentHeight() * ((float) widthSize / (float) mSvgImage
+					.getDocumentWidth()));
+		}
+
+		else if (heightMode == MeasureSpec.EXACTLY
+				&& widthMode == MeasureSpec.AT_MOST) {
+			// Usually the case if width is MATCH_PARENT and the height is
+			// WRAP_CONTENT
+			chosenHeight = heightSize;
+			chosenWidth = (int) (mSvgImage.getDocumentWidth() * ((float) heightSize / (float) mSvgImage
+					.getDocumentHeight()));
+		}
+
+		else if (heightMode == MeasureSpec.AT_MOST
+				&& widthMode == MeasureSpec.AT_MOST) {
+			float uniformScaleFactor;
+			uniformScaleFactor = Math.min(
+					(float) widthSize / (float) mSvgImage.getDocumentWidth(),
+					(float) heightSize / (float) mSvgImage.getDocumentHeight());
+			chosenHeight = (int) (mSvgImage.getDocumentWidth() * uniformScaleFactor);
+			chosenWidth = (int) (mSvgImage.getDocumentHeight() * uniformScaleFactor);
+		}
+
+		else if ((heightMode == MeasureSpec.UNSPECIFIED) != (widthMode == MeasureSpec.UNSPECIFIED)) {
+			// One of them is UNSPECIFIED and the other is either AT_MOST or
+			// EXACTLY
+			if (heightMode == MeasureSpec.UNSPECIFIED) {
+				chosenWidth = widthSize;
+				chosenHeight = (int) (mSvgImage.getDocumentHeight() * ((float) widthSize / (float) mSvgImage
+						.getDocumentWidth()));
+			} else {
+				chosenHeight = heightSize;
+				chosenWidth = (int) (mSvgImage.getDocumentWidth() * ((float) heightSize / (float) mSvgImage
+						.getDocumentHeight()));
+			}
+		}
+
+		else {
+			chosenWidth = chooseDimension(widthMode, widthSize,
+					mSvgImage.getDocumentWidth());
+			chosenHeight = chooseDimension(heightMode, heightSize,
+					mSvgImage.getDocumentHeight());
+		}
 
 		setMeasuredDimension(chosenWidth, chosenHeight);
-
-		super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 	}
 
-	private int chooseDimension(int mode, int size) {
+	private int chooseDimension(int mode, int size, int documentSize) {
 		if (mode == MeasureSpec.AT_MOST || mode == MeasureSpec.EXACTLY) {
 			return size;
 		} else { // (mode == MeasureSpec.UNSPECIFIED)
-			return getPreferredSize();
+			return documentSize;
 		}
 	}
 
