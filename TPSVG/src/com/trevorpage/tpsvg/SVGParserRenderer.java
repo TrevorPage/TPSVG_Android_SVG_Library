@@ -439,255 +439,273 @@ public class SVGParserRenderer extends DefaultHandler {
 														// remove them.
 			switch (StandardAttributes.toAttr(attrImpl.getLocalName(n))) {
 
-			case x:
-				mParsedAttributes.x = parseCoOrdinate(value);
-				break;
+				case x :
+					mParsedAttributes.x = parseCoOrdinate(value);
+					break;
 
-			case y:
-				mParsedAttributes.y = parseCoOrdinate(value);
-				break;
+				case y :
+					mParsedAttributes.y = parseCoOrdinate(value);
+					break;
 
-			case x1:
-				mParsedAttributes.x1 = parseCoOrdinate(value);
-				break;
+				case x1 :
+					mParsedAttributes.x1 = parseCoOrdinate(value);
+					break;
 
-			case y1:
-				mParsedAttributes.y1 = parseCoOrdinate(value);
-				break;
+				case y1 :
+					mParsedAttributes.y1 = parseCoOrdinate(value);
+					break;
 
-			case x2:
-				mParsedAttributes.x2 = parseCoOrdinate(value);
-				break;
+				case x2 :
+					mParsedAttributes.x2 = parseCoOrdinate(value);
+					break;
 
-			case y2:
-				mParsedAttributes.y2 = parseCoOrdinate(value);
-				break;
+				case y2 :
+					mParsedAttributes.y2 = parseCoOrdinate(value);
+					break;
 
-			case cx:
-				mParsedAttributes.cx = parseCoOrdinate(value);
-				break;
+				case cx :
+					mParsedAttributes.cx = parseCoOrdinate(value);
+					break;
 
-			case cy:
-				mParsedAttributes.cy = parseCoOrdinate(value);
-				break;
+				case cy :
+					mParsedAttributes.cy = parseCoOrdinate(value);
+					break;
 
-			case r:
-				mParsedAttributes.radius = parseCoOrdinate(value);
-				break;
+				case r :
+					mParsedAttributes.radius = parseCoOrdinate(value);
+					break;
 
-			case fx:
-				mParsedAttributes.fx = parseCoOrdinate(value);
-				break;
+				case fx :
+					mParsedAttributes.fx = parseCoOrdinate(value);
+					break;
 
-			case fy:
-				mParsedAttributes.fy = parseCoOrdinate(value);
-				break;
+				case fy :
+					mParsedAttributes.fy = parseCoOrdinate(value);
+					break;
 
-			case rx:
-				mParsedAttributes.rx = parseCoOrdinate(value);
-				break;
+				case rx :
+					mParsedAttributes.rx = parseCoOrdinate(value);
+					break;
 
-			case ry:
-				mParsedAttributes.ry = parseCoOrdinate(value);
-				break;
+				case ry :
+					mParsedAttributes.ry = parseCoOrdinate(value);
+					break;
 
-			case width:
-				mParsedAttributes.width = parseCoOrdinate(value);
-				break;
+				case width :
+					mParsedAttributes.width = parseCoOrdinate(value);
+					break;
 
-			case height:
-				mParsedAttributes.height = parseCoOrdinate(value);
-				break;
+				case height :
+					mParsedAttributes.height = parseCoOrdinate(value);
+					break;
 
-			case d:
-				mParsedAttributes.pathData = value;
-				break;
+				case d :
+					mParsedAttributes.pathData = value;
+					break;
 
-			case transform:
-				mParsedAttributes.transformData = value;
-				break;
+				case transform :
+					mParsedAttributes.transformData = value;
+					break;
 
-			case gradientTransform:
-				mParsedAttributes.transformData = value;
-				break;
+				case gradientTransform :
+					mParsedAttributes.transformData = value;
+					break;
 
-			case id:
-				mParsedAttributes.id = value;
-				break;
+				case id :
+					mParsedAttributes.id = value;
+					break;
 
-			case href:
-				mParsedAttributes.xlink_href = value;
-				break;
+				case href :
+					mParsedAttributes.xlink_href = value;
+					break;
 
-			case style:
-				mParsedAttributes.styleData = value;
-				parseAttributeValuePairsIntoSaxAttributesImpl(attrImpl);
-				// The number of attribute key/value pairs has now been
-				// increased.
-				break;
+				case style :
+					mParsedAttributes.styleData = value;
+					parseAttributeValuePairsIntoSaxAttributesImpl(attrImpl);
+					// The number of attribute key/value pairs has now been
+					// increased.
+					break;
 
-			case font_size:
-				mParsedAttributes.svgStyle.strokePaint
-						.setTextSize(parseCoOrdinate(value));
-				mParsedAttributes.svgStyle.fillPaint
-						.setTextSize(parseCoOrdinate(value));
-				break;
-
-			case font_family:
-				Typeface typeface = getTypeface(value);
-				mParsedAttributes.svgStyle.strokePaint.setTypeface(typeface);
-				mParsedAttributes.svgStyle.fillPaint.setTypeface(typeface);
-				break;
-
-			case fill:
-				if (!value.equals("none")) {
-					if (value.startsWith("url")) {
-						// Assume the form fill:url(#[ID_STRING])
-						String idString = value
-								.substring(5, value.length() - 1);
-						int gradientIdx = this.getGradientByIdString(idString);
-						// TODO: This is giving the Paint a *reference* to one
-						// of the Shader objects
-						// in the gradientList. This is possibly okay, but
-						// because we need to
-						// apply the current Path's Matrix as the gradient's
-						// local Matrix during
-						// rendering, we have to be careful not to permanently
-						// modify the shader,
-						// as otherwise any changes (Matrix transformation etc)
-						// will affect
-						// subsequent uses of that Shader.
-
-						if (gradientIdx != -1) {
-							mParsedAttributes.svgStyle.fillPaint
-									.setShader(gradientList.get(gradientIdx).shader);
-						} else if (mPatternMap.containsKey(idString)) {
-							// s.fillPaint.setShader(mPatternList.get(idString).getShader());
-							mParsedAttributes.svgStyle.mFillPattern = mPatternMap
-									.get(idString);
-						}
-					}
-
-					else {
-						// Set the colour, while preserving the alpha (in case
-						// alpha is to be inherited rather
-						// than being explicity set in the element's own style
-						// attributes)
-						int alpha = mParsedAttributes.svgStyle.fillPaint
-								.getAlpha();
-						mParsedAttributes.svgStyle.fillPaint
-								.setColor(parseColour(value));
-						mParsedAttributes.svgStyle.fillPaint.setAlpha(alpha);
-					}
+				case font_size :
+					mParsedAttributes.svgStyle.strokePaint
+							.setTextSize(parseCoOrdinate(value));
 					mParsedAttributes.svgStyle.fillPaint
-							.setStyle(Paint.Style.FILL);
-					// TODO: Should only need do this once in Style constructor!
-					mParsedAttributes.svgStyle.hasFill = true;
-				} else {
-					// The attribute is fill="none".
-					mParsedAttributes.svgStyle.hasFill = false;
-				}
-				break;
+							.setTextSize(parseCoOrdinate(value));
+					break;
 
-			case opacity:
-				mParsedAttributes.svgStyle.masterOpacity = parseAttrValueFloat(value);
-				mParsedAttributes.svgStyle.fillPaint
-						.setAlpha((int) (mParsedAttributes.svgStyle.masterOpacity
-								* mParsedAttributes.svgStyle.fillOpacity * 255));
-				mParsedAttributes.svgStyle.strokePaint
-						.setAlpha((int) (mParsedAttributes.svgStyle.masterOpacity
-								* mParsedAttributes.svgStyle.strokeOpacity * 255));
-				break;
+				case font_family :
+					Typeface typeface = getTypeface(value);
+					mParsedAttributes.svgStyle.strokePaint
+							.setTypeface(typeface);
+					mParsedAttributes.svgStyle.fillPaint.setTypeface(typeface);
+					break;
 
-			case offset:
-				mParsedAttributes.offset = value;
-				break;
+				case fill :
+					if (!value.equals("none")) {
+						if (value.startsWith("url")) {
+							// Assume the form fill:url(#[ID_STRING])
+							String idString = value.substring(5,
+									value.length() - 1);
+							int gradientIdx = this
+									.getGradientByIdString(idString);
+							// TODO: This is giving the Paint a *reference* to
+							// one
+							// of the Shader objects
+							// in the gradientList. This is possibly okay, but
+							// because we need to
+							// apply the current Path's Matrix as the gradient's
+							// local Matrix during
+							// rendering, we have to be careful not to
+							// permanently
+							// modify the shader,
+							// as otherwise any changes (Matrix transformation
+							// etc)
+							// will affect
+							// subsequent uses of that Shader.
 
-			case fill_opacity: {
-				float opacity = parseAttrValueFloat(value);
-				mParsedAttributes.svgStyle.fillOpacity = opacity;
-				mParsedAttributes.svgStyle.fillPaint
-						.setAlpha((int) ((opacity * mParsedAttributes.svgStyle.masterOpacity) * 255));
-			}
-				break;
+							if (gradientIdx != -1) {
+								mParsedAttributes.svgStyle.fillPaint
+										.setShader(gradientList
+												.get(gradientIdx).shader);
+							} else if (mPatternMap.containsKey(idString)) {
+								// s.fillPaint.setShader(mPatternList.get(idString).getShader());
+								mParsedAttributes.svgStyle.mFillPattern = mPatternMap
+										.get(idString);
+							}
+						}
 
-			case stroke_opacity: {
-				float opacity = parseAttrValueFloat(value);
-				mParsedAttributes.svgStyle.strokeOpacity = opacity;
-				mParsedAttributes.svgStyle.strokePaint
-						.setAlpha((int) ((opacity * mParsedAttributes.svgStyle.masterOpacity) * 255));
-			}
-				break;
-
-			case stroke:
-				if (!value.equals("none")) {
-					if (value.startsWith("url")) {
-						// Assume the form fill:url(#[ID_STRING])
-						int gradientIdx = this.getGradientByIdString(value
-								.substring(5, value.length() - 1));
-						// TODO: See comments further above (in 'fill')
-						// regarding Shader.
-						mParsedAttributes.svgStyle.strokePaint
-								.setShader(gradientList.get(gradientIdx).shader);
+						else {
+							// Set the colour, while preserving the alpha (in
+							// case
+							// alpha is to be inherited rather
+							// than being explicity set in the element's own
+							// style
+							// attributes)
+							int alpha = mParsedAttributes.svgStyle.fillPaint
+									.getAlpha();
+							mParsedAttributes.svgStyle.fillPaint
+									.setColor(parseColour(value));
+							mParsedAttributes.svgStyle.fillPaint
+									.setAlpha(alpha);
+						}
+						mParsedAttributes.svgStyle.fillPaint
+								.setStyle(Paint.Style.FILL);
+						// TODO: Should only need do this once in Style
+						// constructor!
+						mParsedAttributes.svgStyle.hasFill = true;
 					} else {
-						// Set the colour, while preserving the alpha (in case
-						// alpha is to be inherited rather
-						// than being explicity set in the element's own style
-						// attributes)
-						int alpha = mParsedAttributes.svgStyle.strokePaint
-								.getAlpha();
+						// The attribute is fill="none".
+						mParsedAttributes.svgStyle.hasFill = false;
+					}
+					break;
+
+				case opacity :
+					mParsedAttributes.svgStyle.masterOpacity = parseAttrValueFloat(value);
+					mParsedAttributes.svgStyle.fillPaint
+							.setAlpha((int) (mParsedAttributes.svgStyle.masterOpacity
+									* mParsedAttributes.svgStyle.fillOpacity * 255));
+					mParsedAttributes.svgStyle.strokePaint
+							.setAlpha((int) (mParsedAttributes.svgStyle.masterOpacity
+									* mParsedAttributes.svgStyle.strokeOpacity * 255));
+					break;
+
+				case offset :
+					mParsedAttributes.offset = value;
+					break;
+
+				case fill_opacity : {
+					float opacity = parseAttrValueFloat(value);
+					mParsedAttributes.svgStyle.fillOpacity = opacity;
+					mParsedAttributes.svgStyle.fillPaint
+							.setAlpha((int) ((opacity * mParsedAttributes.svgStyle.masterOpacity) * 255));
+				}
+					break;
+
+				case stroke_opacity : {
+					float opacity = parseAttrValueFloat(value);
+					mParsedAttributes.svgStyle.strokeOpacity = opacity;
+					mParsedAttributes.svgStyle.strokePaint
+							.setAlpha((int) ((opacity * mParsedAttributes.svgStyle.masterOpacity) * 255));
+				}
+					break;
+
+				case stroke :
+					if (!value.equals("none")) {
+						if (value.startsWith("url")) {
+							// Assume the form fill:url(#[ID_STRING])
+							int gradientIdx = this.getGradientByIdString(value
+									.substring(5, value.length() - 1));
+							// TODO: See comments further above (in 'fill')
+							// regarding Shader.
+							mParsedAttributes.svgStyle.strokePaint
+									.setShader(gradientList.get(gradientIdx).shader);
+						} else {
+							// Set the colour, while preserving the alpha (in
+							// case
+							// alpha is to be inherited rather
+							// than being explicity set in the element's own
+							// style
+							// attributes)
+							int alpha = mParsedAttributes.svgStyle.strokePaint
+									.getAlpha();
+							mParsedAttributes.svgStyle.strokePaint
+									.setColor(parseColour(value));
+							mParsedAttributes.svgStyle.strokePaint
+									.setAlpha(alpha);
+						}
 						mParsedAttributes.svgStyle.strokePaint
-								.setColor(parseColour(value));
-						mParsedAttributes.svgStyle.strokePaint.setAlpha(alpha);
+								.setStyle(Paint.Style.STROKE); // TODO: Should
+																// only
+																// have to do
+																// once
+																// in the
+																// constructor!
+						mParsedAttributes.svgStyle.hasStroke = true;
+					} else { // The attribute is stroke="none".
+						mParsedAttributes.svgStyle.hasStroke = false;
+					}
+					break;
+
+				case stroke_width :
+					float width = parseCoOrdinate(value);
+					// .setStrokeWidth doesn't seem to deal in px directly;
+					// there
+					// seems to be scaling of 1.5 applied, and this doesn't seem
+					// to depend on screen density. Compensate for it, otherwise
+					// wide stroke widths appear much too thick.
+					if (width > 0) {
+						width /= 1.5;
 					}
 					mParsedAttributes.svgStyle.strokePaint
-							.setStyle(Paint.Style.STROKE); // TODO: Should only
-															// have to do once
-															// in the
-															// constructor!
-					mParsedAttributes.svgStyle.hasStroke = true;
-				} else { // The attribute is stroke="none".
-					mParsedAttributes.svgStyle.hasStroke = false;
-				}
-				break;
+							.setStrokeWidth(width);
+					break;
 
-			case stroke_width:
-				float width = parseCoOrdinate(value);
-				// .setStrokeWidth doesn't seem to deal in px directly; there
-				// seems to be scaling of 1.5 applied, and this doesn't seem
-				// to depend on screen density. Compensate for it, otherwise
-				// wide stroke widths appear much too thick. 
-				if (width > 0) {
-					width /= 1.5;
-				}
-				mParsedAttributes.svgStyle.strokePaint.setStrokeWidth(width);
-				break;
+				case points :
+					mParsedAttributes.pointsData = value;
+					break;
 
-			case points:
-				mParsedAttributes.pointsData = value;
-				break;
+				case text_align :
+					Paint.Align align = Paint.Align.LEFT;
+					if (value.startsWith("center")) {
+						align = Paint.Align.CENTER;
+					} else if (value.startsWith("right")) {
+						align = Paint.Align.RIGHT;
+					}
 
-			case text_align:
-				Paint.Align align = Paint.Align.LEFT;
-				if (value.startsWith("center")) {
-					align = Paint.Align.CENTER;
-				} else if (value.startsWith("right")) {
-					align = Paint.Align.RIGHT;
-				}
+					mParsedAttributes.svgStyle.strokePaint.setTextAlign(align);
+					mParsedAttributes.svgStyle.fillPaint.setTextAlign(align);
+					break;
 
-				mParsedAttributes.svgStyle.strokePaint.setTextAlign(align);
-				mParsedAttributes.svgStyle.fillPaint.setTextAlign(align);
-				break;
+				case viewBox :
+					mParsedAttributes.viewBox = value;
+					break;
 
-			case viewBox:
-				mParsedAttributes.viewBox = value;
-				break;
-
-			default:
-				if (attrImpl.getQName(n).startsWith(CUSTOM_ATTRIBUTE_NAMESPACE)) {
-					parseCustomAttribute(attrImpl.getLocalName(n), value);
-				}
-				break;
+				default :
+					if (attrImpl.getQName(n).startsWith(
+							CUSTOM_ATTRIBUTE_NAMESPACE)) {
+						parseCustomAttribute(attrImpl.getLocalName(n), value);
+					}
+					break;
 			}
 		}
 	}
@@ -696,33 +714,35 @@ public class SVGParserRenderer extends DefaultHandler {
 
 		switch (CustomAttributes.toAttr(localName)) {
 
-		case anchor:
-			value = value.toLowerCase();
-			mParsedAttributes.anchorRight = value.contains("right") ? true
-					: false;
-			mParsedAttributes.anchorBottom = value.contains("bottom") ? true
-					: false;
-			break;
+			case anchor :
+				value = value.toLowerCase();
+				mParsedAttributes.anchorRight = value.contains("right")
+						? true
+						: false;
+				mParsedAttributes.anchorBottom = value.contains("bottom")
+						? true
+						: false;
+				break;
 
-		case stretch_to_remainder:
-			value = value.toLowerCase();
-			mParsedAttributes.stretchToRemainderHeight = value
-					.contains("height") ? true : false;
-			mParsedAttributes.stretchToRemainderWidth = value.contains("width") ? true
-					: false;
-			break;
+			case stretch_to_remainder :
+				value = value.toLowerCase();
+				mParsedAttributes.stretchToRemainderHeight = value
+						.contains("height") ? true : false;
+				mParsedAttributes.stretchToRemainderWidth = value
+						.contains("width") ? true : false;
+				break;
 
-		case visible_on_rotation:
-			PathTokenizer t = new PathTokenizer();
-			String valueCopy = value;
-			while (t.getToken(valueCopy) == PathTokenizer.LTOK_NUMBER) {
-				valueCopy = null;
-				mParsedAttributes.rotations.add(Math.round(t.tokenF));
-			}
-			break;
+			case visible_on_rotation :
+				PathTokenizer t = new PathTokenizer();
+				String valueCopy = value;
+				while (t.getToken(valueCopy) == PathTokenizer.LTOK_NUMBER) {
+					valueCopy = null;
+					mParsedAttributes.rotations.add(Math.round(t.tokenF));
+				}
+				break;
 
-		default:
-			break;
+			default :
+				break;
 		}
 	}
 
@@ -852,7 +872,8 @@ public class SVGParserRenderer extends DefaultHandler {
 			if (width > 0 && height > 0) {
 				patternFill.setPatternViewBox(x, y, width, height);
 			} else {
-				String id = mParsedAttributes.id != null ? mParsedAttributes.id
+				String id = mParsedAttributes.id != null
+						? mParsedAttributes.id
 						: "(no ID specified)";
 				Log.w(LOGTAG,
 						"Pattern element "
@@ -1153,201 +1174,207 @@ public class SVGParserRenderer extends DefaultHandler {
 
 			switch (currentCommandLetter) {
 
-			case 'M':
-			case 'm':
-				x = t.tokenF;
-				t.getToken(null);
-				y = t.tokenF;
-				// A relative moveto command, 'm', is interpreted as an absolute
-				// moveto (M) if it's the first element in the path.
-				if (currentCommandLetter == 'm' && firstElement == false) {
-					x += mCurrentX;
-					y += mCurrentY;
-				}
-				path.moveTo(x, y);
-				mCurrentX = x;
-				mCurrentY = y;
-				if (currentCommandLetter == 'M') {
-					currentCommandLetter = 'L';
-				} else {
-					currentCommandLetter = 'l';
-				}
-				if (segmentStart) {
-					segmentStartX = mCurrentX;
-					segmentStartY = mCurrentY;
-					segmentStart = false;
-				}
-				break;
+				case 'M' :
+				case 'm' :
+					x = t.tokenF;
+					t.getToken(null);
+					y = t.tokenF;
+					// A relative moveto command, 'm', is interpreted as an
+					// absolute
+					// moveto (M) if it's the first element in the path.
+					if (currentCommandLetter == 'm' && firstElement == false) {
+						x += mCurrentX;
+						y += mCurrentY;
+					}
+					path.moveTo(x, y);
+					mCurrentX = x;
+					mCurrentY = y;
+					if (currentCommandLetter == 'M') {
+						currentCommandLetter = 'L';
+					} else {
+						currentCommandLetter = 'l';
+					}
+					if (segmentStart) {
+						segmentStartX = mCurrentX;
+						segmentStartY = mCurrentY;
+						segmentStart = false;
+					}
+					break;
 
-			case 'L':
-			case 'l':
-				x = t.tokenF;
-				t.getToken(null);
-				y = t.tokenF;
-				if (currentCommandLetter == 'l') {
-					x += mCurrentX;
-					y += mCurrentY;
-				}
-				path.lineTo(x, y);
-				mCurrentX = x;
-				mCurrentY = y;
-				if (segmentStart) {
-					segmentStartX = mCurrentX;
-					segmentStartY = mCurrentY;
-					segmentStart = false;
-				}
-				break;
+				case 'L' :
+				case 'l' :
+					x = t.tokenF;
+					t.getToken(null);
+					y = t.tokenF;
+					if (currentCommandLetter == 'l') {
+						x += mCurrentX;
+						y += mCurrentY;
+					}
+					path.lineTo(x, y);
+					mCurrentX = x;
+					mCurrentY = y;
+					if (segmentStart) {
+						segmentStartX = mCurrentX;
+						segmentStartY = mCurrentY;
+						segmentStart = false;
+					}
+					break;
 
-			case 'H':
-			case 'h':
-				x = t.tokenF;
-				if (currentCommandLetter == 'h') {
-					x += mCurrentX;
-				}
-				path.lineTo(x, mCurrentY);
-				mCurrentX = x;
-				if (segmentStart) {
-					segmentStartX = mCurrentX;
-					segmentStartY = mCurrentY;
-					segmentStart = false;
-				}
-				break;
+				case 'H' :
+				case 'h' :
+					x = t.tokenF;
+					if (currentCommandLetter == 'h') {
+						x += mCurrentX;
+					}
+					path.lineTo(x, mCurrentY);
+					mCurrentX = x;
+					if (segmentStart) {
+						segmentStartX = mCurrentX;
+						segmentStartY = mCurrentY;
+						segmentStart = false;
+					}
+					break;
 
-			case 'V':
-			case 'v':
-				y = t.tokenF;
-				if (currentCommandLetter == 'v') {
-					y += mCurrentY;
-				}
-				path.lineTo(mCurrentX, y);
-				mCurrentY = y;
-				if (segmentStart) {
-					segmentStartX = mCurrentX;
-					segmentStartY = mCurrentY;
-					segmentStart = false;
-				}
-				break;
+				case 'V' :
+				case 'v' :
+					y = t.tokenF;
+					if (currentCommandLetter == 'v') {
+						y += mCurrentY;
+					}
+					path.lineTo(mCurrentX, y);
+					mCurrentY = y;
+					if (segmentStart) {
+						segmentStartX = mCurrentX;
+						segmentStartY = mCurrentY;
+						segmentStart = false;
+					}
+					break;
 
-			case 'z':
-				path.close();
-				// The current X, Y need to reflect where this segment started,
-				// as that's where the path's position now is. This is important
-				// to ensure a following relative command (i.e. another segment
-				// begins after a 'z' command) occurs at the right co-ordinates.
-				mCurrentX = segmentStartX;
-				mCurrentY = segmentStartY;
-				segmentStart = true;
-				carry = true;
-				break;
+				case 'z' :
+					path.close();
+					// The current X, Y need to reflect where this segment
+					// started,
+					// as that's where the path's position now is. This is
+					// important
+					// to ensure a following relative command (i.e. another
+					// segment
+					// begins after a 'z' command) occurs at the right
+					// co-ordinates.
+					mCurrentX = segmentStartX;
+					mCurrentY = segmentStartY;
+					segmentStart = true;
+					carry = true;
+					break;
 
-			case 'A':
-			case 'a':
-				rx = t.tokenF;
-				t.getToken(null);
-				ry = t.tokenF;
-				t.getToken(null);
-				x_axis_rotation = t.tokenF;
-				t.getToken(null);
-				large_arc_flag = (t.tokenF == 0f) ? false : true;
-				t.getToken(null);
-				sweep_flag = (t.tokenF == 0f) ? false : true;
-				t.getToken(null);
-				x = t.tokenF;
-				t.getToken(null);
-				y = t.tokenF;
-				if (currentCommandLetter == 'a') {
-					x += mCurrentX;
-					y += mCurrentY;
-				}
-				arcTo(path, rx, ry, x_axis_rotation, large_arc_flag,
-						sweep_flag, x, y);
-				mCurrentX = x;
-				mCurrentY = y;
-				if (segmentStart) {
-					segmentStartX = mCurrentX;
-					segmentStartY = mCurrentY;
-					segmentStart = false;
-				}
-				break;
+				case 'A' :
+				case 'a' :
+					rx = t.tokenF;
+					t.getToken(null);
+					ry = t.tokenF;
+					t.getToken(null);
+					x_axis_rotation = t.tokenF;
+					t.getToken(null);
+					large_arc_flag = (t.tokenF == 0f) ? false : true;
+					t.getToken(null);
+					sweep_flag = (t.tokenF == 0f) ? false : true;
+					t.getToken(null);
+					x = t.tokenF;
+					t.getToken(null);
+					y = t.tokenF;
+					if (currentCommandLetter == 'a') {
+						x += mCurrentX;
+						y += mCurrentY;
+					}
+					arcTo(path, rx, ry, x_axis_rotation, large_arc_flag,
+							sweep_flag, x, y);
+					mCurrentX = x;
+					mCurrentY = y;
+					if (segmentStart) {
+						segmentStartX = mCurrentX;
+						segmentStartY = mCurrentY;
+						segmentStart = false;
+					}
+					break;
 
-			case 'C':
-			case 'c':
-				x1 = t.tokenF;
-				t.getToken(null);
-				y1 = t.tokenF;
-				t.getToken(null);
-				x2 = t.tokenF;
-				t.getToken(null);
-				y2 = t.tokenF;
-				t.getToken(null);
-				x = t.tokenF;
-				t.getToken(null);
-				y = t.tokenF;
-				if (currentCommandLetter == 'c') {
-					x += mCurrentX;
-					y += mCurrentY;
+				case 'C' :
+				case 'c' :
+					x1 = t.tokenF;
+					t.getToken(null);
+					y1 = t.tokenF;
+					t.getToken(null);
+					x2 = t.tokenF;
+					t.getToken(null);
+					y2 = t.tokenF;
+					t.getToken(null);
+					x = t.tokenF;
+					t.getToken(null);
+					y = t.tokenF;
+					if (currentCommandLetter == 'c') {
+						x += mCurrentX;
+						y += mCurrentY;
 
-					x1 += mCurrentX;
-					y1 += mCurrentY;
-					x2 += mCurrentX;
-					y2 += mCurrentY;
-				}
-				// TODO: Could alternatively make use of rCubicTo if it's to be
-				// relative.
-				path.cubicTo(x1, y1, x2, y2, x, y);
-				mLastControlPointX = x2;
-				mLastControlPointY = y2;
-				mCurrentX = x;
-				mCurrentY = y;
-				if (segmentStart) {
-					segmentStartX = mCurrentX;
-					segmentStartY = mCurrentY;
-					segmentStart = false;
-				}
-				break;
+						x1 += mCurrentX;
+						y1 += mCurrentY;
+						x2 += mCurrentX;
+						y2 += mCurrentY;
+					}
+					// TODO: Could alternatively make use of rCubicTo if it's to
+					// be
+					// relative.
+					path.cubicTo(x1, y1, x2, y2, x, y);
+					mLastControlPointX = x2;
+					mLastControlPointY = y2;
+					mCurrentX = x;
+					mCurrentY = y;
+					if (segmentStart) {
+						segmentStartX = mCurrentX;
+						segmentStartY = mCurrentY;
+						segmentStart = false;
+					}
+					break;
 
-			case 'S':
-			case 's':
-				x2 = t.tokenF;
-				t.getToken(null);
-				y2 = t.tokenF;
-				t.getToken(null);
-				x = t.tokenF;
-				t.getToken(null);
-				y = t.tokenF;
-				if (currentCommandLetter == 's') {
-					x += mCurrentX;
-					y += mCurrentY;
-					x2 += mCurrentX;
-					y2 += mCurrentY;
-				}
-				x1 = 2 * mCurrentX - mLastControlPointX;
-				y1 = 2 * mCurrentY - mLastControlPointY;
-				// TODO: Could alternatively make use of rCubicTo if it's a
-				// relative command.
-				path.cubicTo(x1, y1, x2, y2, x, y);
-				mCurrentX = x;
-				mCurrentY = y;
-				if (segmentStart) {
-					segmentStartX = mCurrentX;
-					segmentStartY = mCurrentY;
-					segmentStart = false;
-				}
-				break;
+				case 'S' :
+				case 's' :
+					x2 = t.tokenF;
+					t.getToken(null);
+					y2 = t.tokenF;
+					t.getToken(null);
+					x = t.tokenF;
+					t.getToken(null);
+					y = t.tokenF;
+					if (currentCommandLetter == 's') {
+						x += mCurrentX;
+						y += mCurrentY;
+						x2 += mCurrentX;
+						y2 += mCurrentY;
+					}
+					x1 = 2 * mCurrentX - mLastControlPointX;
+					y1 = 2 * mCurrentY - mLastControlPointY;
+					// TODO: Could alternatively make use of rCubicTo if it's a
+					// relative command.
+					path.cubicTo(x1, y1, x2, y2, x, y);
+					mCurrentX = x;
+					mCurrentY = y;
+					if (segmentStart) {
+						segmentStartX = mCurrentX;
+						segmentStartY = mCurrentY;
+						segmentStart = false;
+					}
+					break;
 
-			case 'Q':
-			case 'q':
-				// TODO: To be completed!
-				break;
+				case 'Q' :
+				case 'q' :
+					// TODO: To be completed!
+					break;
 
-			case 'T':
-			case 't':
-				// TODO: To be completed!
-				break;
+				case 'T' :
+				case 't' :
+					// TODO: To be completed!
+					break;
 
-			default:
-				carry = true;
-				break;
+				default :
+					carry = true;
+					break;
 
 			}
 
@@ -2213,21 +2240,21 @@ public class SVGParserRenderer extends DefaultHandler {
 		canvas.scale(uniformScaleFactor, uniformScaleFactor);
 
 		switch (rotation) {
-		case 90:
-			canvas.rotate(90, 0, 0);
-			canvas.translate(0, -mRootSvgHeight - remainderHeight);
-			break;
-		case 180:
-			canvas.rotate(180, 0, 0);
-			canvas.translate(-mRootSvgWidth - remainderWidth, -mRootSvgHeight
-					- remainderHeight);
-			break;
-		case 270:
-			canvas.rotate(270, 0, 0);
-			canvas.translate(-mRootSvgWidth - remainderWidth, 0);
-			break;
-		default:
-			break;
+			case 90 :
+				canvas.rotate(90, 0, 0);
+				canvas.translate(0, -mRootSvgHeight - remainderHeight);
+				break;
+			case 180 :
+				canvas.rotate(180, 0, 0);
+				canvas.translate(-mRootSvgWidth - remainderWidth,
+						-mRootSvgHeight - remainderHeight);
+				break;
+			case 270 :
+				canvas.rotate(270, 0, 0);
+				canvas.translate(-mRootSvgWidth - remainderWidth, 0);
+				break;
+			default :
+				break;
 		}
 
 		paintImage(canvas, subtreeId, remainderWidth, remainderHeight,
@@ -2274,7 +2301,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	 *            result is that the vector data inside the &lt;pattern&gt;
 	 *            element is drawn to Canvas as if it were regular image data.
 	 */
-	public void paintImage(Canvas canvas, String subtreeId,
+	public synchronized void paintImage(Canvas canvas, String subtreeId,
 			float remainderWidth, float remainderHeight, int rotation,
 			ITpsvgController animHandler, boolean isDrawingPatternTile) {
 
@@ -2347,302 +2374,328 @@ public class SVGParserRenderer extends DefaultHandler {
 
 			switch (bytecodeArr[codePtr]) {
 
-			case INST_PATH:
-				workingPath.rewind();
-				workingPath.addPath(pathListIterator.next());
-				workingPath.addPath(carryPath);
-				workingPath.transform(workingMatrix);
-				carryPath.rewind();
+				case INST_PATH :
+					workingPath.rewind();
+					workingPath.addPath(pathListIterator.next());
+					workingPath.addPath(carryPath);
+					workingPath.transform(workingMatrix);
+					carryPath.rewind();
 
-				// p = pathListIterator.next();
-				// If we assume a Matrix is included for every path, even if
-				// it's an empty matrix,
-				// then we always pop the matrix on path creation. On the other
-				// hand if
-				// Matrix is only inserted for some paths then we somehow need
-				// to know whether
-				// to pop the matrix or just peek at the tip cumulative matrix.
-				// Could have a flag:
-				// pathHasMatrix -- set if a path instruction immediately
-				// follows matrix inst.
+					// p = pathListIterator.next();
+					// If we assume a Matrix is included for every path, even if
+					// it's an empty matrix,
+					// then we always pop the matrix on path creation. On the
+					// other
+					// hand if
+					// Matrix is only inserted for some paths then we somehow
+					// need
+					// to know whether
+					// to pop the matrix or just peek at the tip cumulative
+					// matrix.
+					// Could have a flag:
+					// pathHasMatrix -- set if a path instruction immediately
+					// follows matrix inst.
 
-				animId = null;
-				animIteration = 0;
+					animId = null;
+					animIteration = 0;
 
-				animMatrix.reset();
+					animMatrix.reset();
 
-				if (workingPath.usesRemainderWidthOrHeight()) {
-					if (workingPath.getAnchorRight()) {
-						animMatrix.postTranslate(remainderWidth, 0);
-						workingPath.transform(animMatrix);
-					}
-					if (workingPath.getAnchorBottom()) {
-						animMatrix.postTranslate(0, remainderHeight);
-						workingPath.transform(animMatrix);
-					}
-					if (workingPath.getStretchToRemainderWidth()) {
-						RectF bounds = new RectF();
-						workingPath.computeBounds(bounds, false);
-						animMatrix.setScale(
-								(bounds.right - bounds.left + remainderWidth)
-										/ (bounds.right - bounds.left), 1,
-								bounds.left, 0);
-						workingPath.transform(animMatrix);
-					}
-					if (workingPath.getStretchToRemainderHeight()) {
-						RectF bounds = new RectF();
-						workingPath.computeBounds(bounds, false);
-						animMatrix.setScale(1,
-								(bounds.bottom - bounds.top + remainderHeight)
-										/ (bounds.bottom - bounds.top), 0,
-								bounds.top);
-						workingPath.transform(animMatrix);
-					}
-				}
-
-				do {
-
-					if (doSpecialIdCallbackForNextElement == true) {
-						if (animId == null) {
-							animId = idstringListIterator.next();
-						}
-						if (animHandler != null) {
-							animMatrix.reset();
-
-							doSpecialIdCallbackForNextElement = animHandler
-									.animElement(animId, animIteration++,
-											animMatrix, currentStrokePaint,
-											currentFillPaint);
+					if (workingPath.usesRemainderWidthOrHeight()) {
+						if (workingPath.getAnchorRight()) {
+							animMatrix.postTranslate(remainderWidth, 0);
 							workingPath.transform(animMatrix);
-
-						} else {
-							doSpecialIdCallbackForNextElement = false;
+						}
+						if (workingPath.getAnchorBottom()) {
+							animMatrix.postTranslate(0, remainderHeight);
+							workingPath.transform(animMatrix);
+						}
+						if (workingPath.getStretchToRemainderWidth()) {
+							RectF bounds = new RectF();
+							workingPath.computeBounds(bounds, false);
+							animMatrix
+									.setScale(
+											(bounds.right - bounds.left + remainderWidth)
+													/ (bounds.right - bounds.left),
+											1, bounds.left, 0);
+							workingPath.transform(animMatrix);
+						}
+						if (workingPath.getStretchToRemainderHeight()) {
+							RectF bounds = new RectF();
+							workingPath.computeBounds(bounds, false);
+							animMatrix
+									.setScale(
+											1,
+											(bounds.bottom - bounds.top + remainderHeight)
+													/ (bounds.bottom - bounds.top),
+											0, bounds.top);
+							workingPath.transform(animMatrix);
 						}
 					}
 
-					shaderMatrix = null;
-					if (currentFillPaint != null) {
+					do {
 
-						Matrix copyShaderMatrix = null;
-						if (currentFillPaint.getShader() != null) {
-							shaderMatrix = new Matrix();
-							currentFillPaint.getShader().getLocalMatrix(
-									shaderMatrix);
-							copyShaderMatrix = new Matrix(shaderMatrix); // Deep
-																			// copy.
-							copyShaderMatrix.postConcat(workingMatrix);
-							copyShaderMatrix.postConcat(animMatrix);
-							currentFillPaint.getShader().setLocalMatrix(
-									copyShaderMatrix);
+						if (doSpecialIdCallbackForNextElement == true) {
+							if (animId == null) {
+								animId = idstringListIterator.next();
+							}
+							if (animHandler != null) {
+								animMatrix.reset();
+
+								doSpecialIdCallbackForNextElement = animHandler
+										.animElement(animId, animIteration++,
+												animMatrix, currentStrokePaint,
+												currentFillPaint);
+								workingPath.transform(animMatrix);
+
+							} else {
+								doSpecialIdCallbackForNextElement = false;
+							}
 						}
-						if (!mSkipPattern
-								&& workingPath.getVisibleOnRotation(rotation)) {
-							mCanvas.drawPath(workingPath, currentFillPaint);
+
+						shaderMatrix = null;
+						if (currentFillPaint != null) {
+
+							Matrix copyShaderMatrix = null;
+							if (currentFillPaint.getShader() != null) {
+								shaderMatrix = new Matrix();
+								currentFillPaint.getShader().getLocalMatrix(
+										shaderMatrix);
+								copyShaderMatrix = new Matrix(shaderMatrix); // Deep
+																				// copy.
+								copyShaderMatrix.postConcat(workingMatrix);
+								copyShaderMatrix.postConcat(animMatrix);
+								currentFillPaint.getShader().setLocalMatrix(
+										copyShaderMatrix);
+							}
+							if (!mSkipPattern
+									&& workingPath
+											.getVisibleOnRotation(rotation)) {
+								mCanvas.drawPath(workingPath, currentFillPaint);
+							}
+							if (shaderMatrix != null) {
+								currentFillPaint.getShader().setLocalMatrix(
+										shaderMatrix); // Restore shader's
+														// original
+														// Matrix
+							}
 						}
-						if (shaderMatrix != null) {
-							currentFillPaint.getShader().setLocalMatrix(
-									shaderMatrix); // Restore shader's original
-													// Matrix
+
+						if (currentStrokePaint != null) {
+
+							workingMatrix.getValues(matrixValues);
+							float storedStrokeWidth = currentStrokePaint
+									.getStrokeWidth();
+							currentStrokePaint
+									.setStrokeWidth(storedStrokeWidth
+											* (Math.abs(matrixValues[Matrix.MSCALE_Y]) + Math
+													.abs(matrixValues[Matrix.MSCALE_X]) / 2));
+							// Paint scaledPaint = new
+							// Paint(currentStrokePaint);
+							// scaledPaint.setStrokeWidth(scaledPaint.getStrokeWidth()
+							// * ( ( Math.abs(matrixValues[Matrix.MSCALE_Y]) +
+							// Math.abs(matrixValues[Matrix.MSCALE_X]) ) / 2 )
+							// );
+
+							// //float curStrkWidth =
+							// scaledPaint.getStrokeWidth();
+							// //float newStrkWidth = (
+							// Math.abs(f[Matrix.MSCALE_Y])
+							// + Math.abs(f[Matrix.MSCALE_X]) ) / 2.0f ;
+							// //newStrkWidth = curStrkWidth * newStrkWidth;
+							// //scaledPaint.setStrokeWidth(newStrkWidth);
+
+							Matrix copyShaderMatrix = null;
+
+							// TODO: Does this block now go after the
+							// mCanvas.drawPath?
+							if (currentStrokePaint.getShader() != null) {
+								shaderMatrix = new Matrix();
+								currentStrokePaint.getShader().getLocalMatrix(
+										shaderMatrix);
+								copyShaderMatrix = new Matrix(shaderMatrix); // Deep
+																				// copy.
+								copyShaderMatrix.postConcat(workingMatrix);
+								copyShaderMatrix.postConcat(animMatrix);
+								currentStrokePaint.getShader().setLocalMatrix(
+										copyShaderMatrix);
+							}
+
+							if (!mSkipPattern
+									&& workingPath
+											.getVisibleOnRotation(rotation)) {
+								mCanvas.drawPath(workingPath,
+										currentStrokePaint);
+							}
+
+							if (shaderMatrix != null) {
+								currentStrokePaint.getShader().setLocalMatrix(
+										shaderMatrix); // Restore shader's
+														// original
+														// Matrix
+							}
+
+							currentStrokePaint
+									.setStrokeWidth(storedStrokeWidth);
 						}
+
+					} while (doSpecialIdCallbackForNextElement == true);
+					break;
+
+				case INST_MATRIX :
+					workingMatrix = matrixListIterator.next();
+					break;
+
+				case INST_BEGINGROUP :
+					// Similar notes regarding Matrix for path.
+					// If last instruction was a matrix instruction, then set
+					// flag:
+					// groupHasMatrix
+					// Actually, no. Assume a matrix for all groups.
+					// Assume that a Matrix instruction went before this one!
+					gDepth++;
+					break;
+
+				case INST_ENDGROUP :
+					gDepth--;
+					if (gDepth == 1 && subtreeId != null) {
+						// The loop will now terminate and finish rendering,
+						// because
+						// the specified SVG
+						// image fragment has been drawn.
+						gDepth = 0;
 					}
+					break;
 
-					if (currentStrokePaint != null) {
-
-						workingMatrix.getValues(matrixValues);
-						float storedStrokeWidth = currentStrokePaint
-								.getStrokeWidth();
-						currentStrokePaint
-								.setStrokeWidth(storedStrokeWidth
-										* (Math.abs(matrixValues[Matrix.MSCALE_Y]) + Math
-												.abs(matrixValues[Matrix.MSCALE_X]) / 2));
-						// Paint scaledPaint = new Paint(currentStrokePaint);
-						// scaledPaint.setStrokeWidth(scaledPaint.getStrokeWidth()
-						// * ( ( Math.abs(matrixValues[Matrix.MSCALE_Y]) +
-						// Math.abs(matrixValues[Matrix.MSCALE_X]) ) / 2 ) );
-
-						// //float curStrkWidth = scaledPaint.getStrokeWidth();
-						// //float newStrkWidth = ( Math.abs(f[Matrix.MSCALE_Y])
-						// + Math.abs(f[Matrix.MSCALE_X]) ) / 2.0f ;
-						// //newStrkWidth = curStrkWidth * newStrkWidth;
-						// //scaledPaint.setStrokeWidth(newStrkWidth);
-
-						Matrix copyShaderMatrix = null;
-
-						// TODO: Does this block now go after the
-						// mCanvas.drawPath?
-						if (currentStrokePaint.getShader() != null) {
-							shaderMatrix = new Matrix();
-							currentStrokePaint.getShader().getLocalMatrix(
-									shaderMatrix);
-							copyShaderMatrix = new Matrix(shaderMatrix); // Deep
-																			// copy.
-							copyShaderMatrix.postConcat(workingMatrix);
-							copyShaderMatrix.postConcat(animMatrix);
-							currentStrokePaint.getShader().setLocalMatrix(
-									copyShaderMatrix);
-						}
-
-						if (!mSkipPattern
-								&& workingPath.getVisibleOnRotation(rotation)) {
-							mCanvas.drawPath(workingPath, currentStrokePaint);
-						}
-
-						if (shaderMatrix != null) {
-							currentStrokePaint.getShader().setLocalMatrix(
-									shaderMatrix); // Restore shader's original
-													// Matrix
-						}
-
-						currentStrokePaint.setStrokeWidth(storedStrokeWidth);
+				case INST_BEGIN_PATTERN :
+					if (!isDrawingPatternTile) {
+						mSkipPattern = true;
 					}
+					gDepth++;
+					break;
 
-				} while (doSpecialIdCallbackForNextElement == true);
-				break;
+				case INST_END_PATTERN :
+					mSkipPattern = false;
+					gDepth--;
+					if (isDrawingPatternTile && gDepth == 1
+							&& subtreeId != null) {
+						// The loop will now terminate and finish rendering,
+						// because
+						// the specified SVG
+						// image fragment has been drawn.
+						gDepth = 0;
+					}
+					break;
 
-			case INST_MATRIX:
-				workingMatrix = matrixListIterator.next();
-				break;
+				case INST_STYLE :
+					SvgStyle currentStyle = styleListIterator.next();
+					if (currentStyle.hasStroke) {
+						// IMPORTANT: Making copy as opposed to a reference.
+						// This
+						// enables
+						// currentStrokePaint to be modified without risk of
+						// making
+						// changes to
+						// things that strokePaint references, e.g. Gradients.
+						// Same applies to currentFillPaint.
+						// currentStrokePaint = new Paint(s.strokePaint);
+						currentStrokePaint = currentStyle.strokePaint;
+					} else {
+						currentStrokePaint = null;
+					}
+					if (currentStyle.hasFill) {
+						// currentFillPaint = new Paint(s.fillPaint);
+						currentFillPaint = currentStyle.fillPaint;
+					} else {
+						currentFillPaint = null;
+					}
+					break;
 
-			case INST_BEGINGROUP:
-				// Similar notes regarding Matrix for path.
-				// If last instruction was a matrix instruction, then set flag:
-				// groupHasMatrix
-				// Actually, no. Assume a matrix for all groups.
-				// Assume that a Matrix instruction went before this one!
-				gDepth++;
-				break;
+				case INST_TEXTSTRING :
+					Textstring ts = textstringListIterator.next();
+					workingMatrix.getValues(matrixValues);
+					// We might have already got the values for currentMatrix
+					// before, to save
+					// on this operation.
+					// Paint scaledPaint = new Paint(currentStrokePaint);
+					// scaledPaint.setStrokeWidth(scaledPaint.getStrokeWidth() *
+					// ( (
+					// f[Matrix.MSCALE_Y] + f[Matrix.MSCALE_X] ) / 2 ) );
 
-			case INST_ENDGROUP:
-				gDepth--;
-				if (gDepth == 1 && subtreeId != null) {
-					// The loop will now terminate and finish rendering, because
-					// the specified SVG
-					// image fragment has been drawn.
-					gDepth = 0;
-				}
-				break;
+					animId = null;
+					animIteration = 0;
+					animMatrix.reset();
+					do {
 
-			case INST_BEGIN_PATTERN:
-				if (!isDrawingPatternTile) {
-					mSkipPattern = true;
-				}
-				gDepth++;
-				break;
-
-			case INST_END_PATTERN:
-				mSkipPattern = false;
-				gDepth--;
-				if (isDrawingPatternTile && gDepth == 1 && subtreeId != null) {
-					// The loop will now terminate and finish rendering, because
-					// the specified SVG
-					// image fragment has been drawn.
-					gDepth = 0;
-				}
-				break;
-
-			case INST_STYLE:
-				SvgStyle currentStyle = styleListIterator.next();
-				if (currentStyle.hasStroke) {
-					// IMPORTANT: Making copy as opposed to a reference. This
-					// enables
-					// currentStrokePaint to be modified without risk of making
-					// changes to
-					// things that strokePaint references, e.g. Gradients.
-					// Same applies to currentFillPaint.
-					// currentStrokePaint = new Paint(s.strokePaint);
-					currentStrokePaint = currentStyle.strokePaint;
-				} else {
-					currentStrokePaint = null;
-				}
-				if (currentStyle.hasFill) {
-					// currentFillPaint = new Paint(s.fillPaint);
-					currentFillPaint = currentStyle.fillPaint;
-				} else {
-					currentFillPaint = null;
-				}
-				break;
-
-			case INST_TEXTSTRING:
-				Textstring ts = textstringListIterator.next();
-				workingMatrix.getValues(matrixValues);
-				// We might have already got the values for currentMatrix
-				// before, to save
-				// on this operation.
-				// Paint scaledPaint = new Paint(currentStrokePaint);
-				// scaledPaint.setStrokeWidth(scaledPaint.getStrokeWidth() * ( (
-				// f[Matrix.MSCALE_Y] + f[Matrix.MSCALE_X] ) / 2 ) );
-
-				animId = null;
-				animIteration = 0;
-				animMatrix.reset();
-				do {
-
-					if (doSpecialIdCallbackForNextElement == true) {
-						if (animId == null) {
-							animId = idstringListIterator.next();
+						if (doSpecialIdCallbackForNextElement == true) {
+							if (animId == null) {
+								animId = idstringListIterator.next();
+							}
+							if (animHandler != null) {
+								// animMatrix.reset(); //Matrix animMatrix = new
+								// Matrix();
+								doSpecialIdCallbackForNextElement = animHandler
+										.animTextElement(
+												animId,
+												animIteration++,
+												animMatrix,
+												null,
+												ts,
+												ts.x
+														+ matrixValues[Matrix.MTRANS_X],
+												ts.y
+														+ matrixValues[Matrix.MTRANS_Y]);
+								// p.transform(animMatrix);
+							} else {
+								doSpecialIdCallbackForNextElement = false;
+							}
 						}
-						if (animHandler != null) {
-							// animMatrix.reset(); //Matrix animMatrix = new
-							// Matrix();
-							doSpecialIdCallbackForNextElement = animHandler
-									.animTextElement(
-											animId,
-											animIteration++,
-											animMatrix,
-											null,
-											ts,
-											ts.x
-													+ matrixValues[Matrix.MTRANS_X],
-											ts.y
-													+ matrixValues[Matrix.MTRANS_Y]);
-							// p.transform(animMatrix);
-						} else {
-							doSpecialIdCallbackForNextElement = false;
+
+						mCanvas.save();
+						mCanvas.concat(animMatrix);
+						mCanvas.concat(workingMatrix);
+
+						if (currentStrokePaint != null && !mSkipPattern) {
+
+							mCanvas.drawText(ts.string, 0, ts.string.length(),
+									ts.x, ts.y, currentStrokePaint);
+							// mCanvas.drawText(ts.string, 0,
+							// ts.string.length(),
+							// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
+							// matrixValues[Matrix.MTRANS_Y],
+							// currentStrokePaint);
 						}
+						if (currentFillPaint != null && !mSkipPattern) {
+
+							mCanvas.drawText(ts.string, 0, ts.string.length(),
+									ts.x, ts.y, currentFillPaint);
+							// mCanvas.drawText(ts.string, 0,
+							// ts.string.length(),
+							// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
+							// matrixValues[Matrix.MTRANS_Y], currentFillPaint);
+
+						}
+
+						mCanvas.restore();
+					} while (doSpecialIdCallbackForNextElement == true);
+
+					break;
+
+				case INST_IDSTRING :
+					doSpecialIdCallbackForNextElement = true;
+					break;
+
+				case INST_ARC :
+					Arc arc = arcsListIterator.next();
+					// Path path = new Path();
+					if (animHandler != null) {
+						animHandler.arcParams(arc.animId, carryPath,
+								arc.angleStart, arc.angleExtent, arc.bounds);
+					} else {
+						carryPath.addArc(arc.bounds, arc.angleStart,
+								arc.angleExtent);
 					}
-
-					mCanvas.save();
-					mCanvas.concat(animMatrix);
-					mCanvas.concat(workingMatrix);
-
-					if (currentStrokePaint != null && !mSkipPattern) {
-
-						mCanvas.drawText(ts.string, 0, ts.string.length(),
-								ts.x, ts.y, currentStrokePaint);
-						// mCanvas.drawText(ts.string, 0, ts.string.length(),
-						// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
-						// matrixValues[Matrix.MTRANS_Y], currentStrokePaint);
-					}
-					if (currentFillPaint != null && !mSkipPattern) {
-
-						mCanvas.drawText(ts.string, 0, ts.string.length(),
-								ts.x, ts.y, currentFillPaint);
-						// mCanvas.drawText(ts.string, 0, ts.string.length(),
-						// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
-						// matrixValues[Matrix.MTRANS_Y], currentFillPaint);
-
-					}
-
-					mCanvas.restore();
-				} while (doSpecialIdCallbackForNextElement == true);
-
-				break;
-
-			case INST_IDSTRING:
-				doSpecialIdCallbackForNextElement = true;
-				break;
-
-			case INST_ARC:
-				Arc arc = arcsListIterator.next();
-				// Path path = new Path();
-				if (animHandler != null) {
-					animHandler.arcParams(arc.animId, carryPath,
-							arc.angleStart, arc.angleExtent, arc.bounds);
-				} else {
-					carryPath.addArc(arc.bounds, arc.angleStart,
-							arc.angleExtent);
-				}
-				break;
+					break;
 
 			}
 			codePtr++;
