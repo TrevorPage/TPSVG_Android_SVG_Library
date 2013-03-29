@@ -87,7 +87,7 @@ public class SVGParserRenderer extends DefaultHandler {
 
 	/** Supported standard SVG attributes */
 	private enum StandardAttributes {
-		x, y, x1, y1, x2, y2, cx, cy, fx, fy, r, rx, ry, height, width, d, transform, gradientTransform, style, href, id, opacity, fill, fill_opacity, font_size, font_family, stroke, stroke_fill, stroke_opacity, stroke_width, text_align, offset, points, viewBox, novalue;
+		x, y, x1, y1, x2, y2, cx, cy, fx, fy, r, rx, ry, height, width, d, transform, gradientTransform, style, href, id, opacity, fill, fill_opacity, font_size, font_family, stroke, stroke_fill, stroke_opacity, stroke_width, text_align, text_anchor, offset, points, viewBox, novalue;
 
 		public static StandardAttributes toAttr(String str) {
 			try {
@@ -685,10 +685,12 @@ public class SVGParserRenderer extends DefaultHandler {
 					break;
 
 				case text_align :
+					break;
+				case text_anchor :
 					Paint.Align align = Paint.Align.LEFT;
-					if (value.startsWith("center")) {
+					if (value.startsWith("middle")) {
 						align = Paint.Align.CENTER;
-					} else if (value.startsWith("right")) {
+					} else if (value.startsWith("end")) {
 						align = Paint.Align.RIGHT;
 					}
 
@@ -1116,8 +1118,10 @@ public class SVGParserRenderer extends DefaultHandler {
 	 */
 	private void text_characters(char[] src, int srcPos, int length) {
 		// addStyle();
-		this.textstringList.add(new Textstring(mParsedAttributes.x,
-				mParsedAttributes.y, src, srcPos, length));
+		Textstring textString = new Textstring(mParsedAttributes.x,
+				mParsedAttributes.y, src, srcPos, length);
+		textString.mAnchorRight = mParsedAttributes.anchorRight;
+		textstringList.add(textString);
 		// Assume for now that all textstrings have a matrix
 		// if (mProperties.transformData != null) {
 		// addTransform();
@@ -1133,8 +1137,10 @@ public class SVGParserRenderer extends DefaultHandler {
 	}
 
 	private void tspan_characters(char[] src, int srcPos, int length) {
-		this.textstringList.add(new Textstring(mParsedAttributes.x,
-				mParsedAttributes.y, src, srcPos, length));
+		Textstring textString = new Textstring(mParsedAttributes.x,
+				mParsedAttributes.y, src, srcPos, length);
+		textString.mAnchorRight = mParsedAttributes.anchorRight;
+		textstringList.add(textString);
 		// Assume for now that all textstrings have a matrix
 		// if (mProperties.transformData != null) {
 		// addTransform();
@@ -2625,6 +2631,11 @@ public class SVGParserRenderer extends DefaultHandler {
 					animId = null;
 					animIteration = 0;
 					animMatrix.reset();
+
+					if (ts.mAnchorRight) {
+						animMatrix.postTranslate(remainderWidth, 0);
+					}
+
 					do {
 
 						if (doSpecialIdCallbackForNextElement == true) {
@@ -2658,7 +2669,9 @@ public class SVGParserRenderer extends DefaultHandler {
 						if (currentStrokePaint != null && !mSkipPattern) {
 
 							mCanvas.drawText(ts.string, 0, ts.string.length(),
-									ts.x, ts.y, currentStrokePaint);
+							/*
+							 * ts.mAnchorRight ? ts.x + remainderWidth :
+							 */ts.x, ts.y, currentStrokePaint);
 							// mCanvas.drawText(ts.string, 0,
 							// ts.string.length(),
 							// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
@@ -2668,7 +2681,9 @@ public class SVGParserRenderer extends DefaultHandler {
 						if (currentFillPaint != null && !mSkipPattern) {
 
 							mCanvas.drawText(ts.string, 0, ts.string.length(),
-									ts.x, ts.y, currentFillPaint);
+							/*
+							 * ts.mAnchorRight ? ts.x + remainderWidth :
+							 */ts.x, ts.y, currentFillPaint);
 							// mCanvas.drawText(ts.string, 0,
 							// ts.string.length(),
 							// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
@@ -2849,6 +2864,8 @@ public class SVGParserRenderer extends DefaultHandler {
 		public final float x, y;
 		public char[] charBuf;
 		public int charLength;
+		private boolean mAnchorRight;
+		private boolean mAnchorBottom;
 
 		public StringBuilder string;
 
