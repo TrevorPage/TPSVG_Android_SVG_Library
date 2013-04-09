@@ -2410,33 +2410,30 @@ public class SVGParserRenderer extends DefaultHandler {
 					if (workingPath.usesRemainderWidthOrHeight()) {
 						if (workingPath.getAnchorRight()) {
 							animMatrix.postTranslate(remainderWidth, 0);
-							workingPath.transform(animMatrix);
 						}
 						if (workingPath.getAnchorBottom()) {
 							animMatrix.postTranslate(0, remainderHeight);
-							workingPath.transform(animMatrix);
 						}
 						if (workingPath.getStretchToRemainderWidth()) {
 							RectF bounds = new RectF();
 							workingPath.computeBounds(bounds, false);
 							animMatrix
-									.setScale(
+									.postScale(
 											(bounds.right - bounds.left + remainderWidth)
 													/ (bounds.right - bounds.left),
 											1, bounds.left, 0);
-							workingPath.transform(animMatrix);
 						}
 						if (workingPath.getStretchToRemainderHeight()) {
 							RectF bounds = new RectF();
 							workingPath.computeBounds(bounds, false);
 							animMatrix
-									.setScale(
+									.postScale(
 											1,
 											(bounds.bottom - bounds.top + remainderHeight)
 													/ (bounds.bottom - bounds.top),
 											0, bounds.top);
-							workingPath.transform(animMatrix);
 						}
+						workingPath.transform(animMatrix);
 					}
 
 					do {
