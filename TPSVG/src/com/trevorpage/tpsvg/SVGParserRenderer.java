@@ -1168,6 +1168,7 @@ public class SVGParserRenderer extends DefaultHandler {
 		float segmentStartX = 0;
 		float segmentStartY = 0;
 		boolean segmentStart = true;
+
 		do {
 			if (t.currentTok == PathTokenizer.LTOK_LETTER) {
 				currentCommandLetter = t.tokenChar;
@@ -1291,8 +1292,19 @@ public class SVGParserRenderer extends DefaultHandler {
 						x += mCurrentX;
 						y += mCurrentY;
 					}
-					arcTo(path, rx, ry, x_axis_rotation, large_arc_flag,
-							sweep_flag, x, y);
+
+					// If this arc is the only element in the segment then it is stored as an
+					// isolated arc object which means it can be programmatically manipulated in 
+					// terms of start and sweep angle. Otherwise, it forms part of a complex
+					// Path object, and the arc can't be specially manipulated. 
+					if (t.getToken(null) == PathTokenizer.LTOK_END && path.isEmpty()) {
+						//arcTo(null, rx, ry, x_axis_rotation, large_arc_flag, sweep_flag, x, y);	
+					}
+					else {
+						arcTo(path, rx, ry, x_axis_rotation, large_arc_flag, sweep_flag, x, y);	
+					}
+					carry = true;
+
 					mCurrentX = x;
 					mCurrentY = y;
 					if (segmentStart) {
@@ -1710,119 +1722,113 @@ public class SVGParserRenderer extends DefaultHandler {
 	 * @param y
 	 */
 
-	public/* static */final void arcTo(Path path, float rx, float ry,
-			float theta, boolean largeArcFlag, boolean sweepFlag, float x,
-			float y) {
+	private void arcTo(Path path, float rx, float ry, float theta, boolean largeArcFlag, boolean sweepFlag, float x, float y) {
 		// Ensure radii are valid
-		if (rx == 0 || ry == 0) {
-			path.lineTo(x, y);
-			return;
+		if (rx != 0 && ry != 0) {
+	
+			// Get the current (x, y) coordinates of the path
+			// Point2D p2d = path.getCurrentPoint();
+	
+			float x0 = mCurrentX; // (float) p2d.getX();
+			float y0 = mCurrentY; // (float) p2d.getY();
+			// Compute the half distance between the current and the final point
+			float dx2 = (x0 - x) / 2.0f;
+			float dy2 = (y0 - y) / 2.0f;
+			// Convert theta from degrees to radians
+			theta = (float) Math.toRadians(theta % 360f);
+	
+			//
+			// Step 1 : Compute (x1, y1)
+			//
+			float x1 = (float) (Math.cos(theta) * (double) dx2 + Math.sin(theta)
+					* (double) dy2);
+			float y1 = (float) (-Math.sin(theta) * (double) dx2 + Math.cos(theta)
+					* (double) dy2);
+			// Ensure radii are large enough
+			rx = Math.abs(rx);
+			ry = Math.abs(ry);
+			float Prx = rx * rx;
+			float Pry = ry * ry;
+			float Px1 = x1 * x1;
+			float Py1 = y1 * y1;
+			double d = Px1 / Prx + Py1 / Pry;
+			if (d > 1) {
+				rx = Math.abs((float) (Math.sqrt(d) * (double) rx));
+				ry = Math.abs((float) (Math.sqrt(d) * (double) ry));
+				Prx = rx * rx;
+				Pry = ry * ry;
+			}
+	
+			//
+			// Step 2 : Compute (cx1, cy1)
+			//
+			double sign = (largeArcFlag == sweepFlag) ? -1d : 1d;
+	
+			// float coef = (float) (sign * Math
+			// .sqrt(((Prx * Pry) - (Prx * Py1) - (Pry * Px1))
+			// / ((Prx * Py1) + (Pry * Px1))));
+	
+			double sq = (((Prx * Pry) - (Prx * Py1) - (Pry * Px1)) / ((Prx * Py1) + (Pry * Px1)));
+	
+			sq = (sq < 0) ? 0 : sq;
+			float coef = (float) (sign * Math.sqrt(sq));
+	
+			float cx1 = coef * ((rx * y1) / ry);
+			float cy1 = coef * -((ry * x1) / rx);
+	
+			//
+			// Step 3 : Compute (cx, cy) from (cx1, cy1)
+			//
+			float sx2 = (x0 + x) / 2.0f;
+			float sy2 = (y0 + y) / 2.0f;
+			float cx = sx2
+					+ (float) (Math.cos(theta) * (double) cx1 - Math.sin(theta)
+							* (double) cy1);
+			float cy = sy2
+					+ (float) (Math.sin(theta) * (double) cx1 + Math.cos(theta)
+							* (double) cy1);
+	
+			//
+			// Step 4 : Compute the angleStart (theta1) and the angleExtent (dtheta)
+			//
+			float ux = (x1 - cx1) / rx;
+			float uy = (y1 - cy1) / ry;
+			float vx = (-x1 - cx1) / rx;
+			float vy = (-y1 - cy1) / ry;
+			float p, n;
+			// Compute the angle start
+			n = (float) Math.sqrt((ux * ux) + (uy * uy));
+			p = ux; // (1 * ux) + (0 * uy)
+			sign = (uy < 0) ? -1d : 1d;
+			float angleStart = (float) Math.toDegrees(sign * Math.acos(p / n));
+			// Compute the angle extent
+			n = (float) Math.sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy));
+			p = ux * vx + uy * vy;
+			sign = (ux * vy - uy * vx < 0) ? -1d : 1d;
+			float angleExtent = (float) Math.toDegrees(sign * Math.acos(p / n));
+			if (!sweepFlag && angleExtent > 0) {
+				angleExtent -= 360f;
+			} else if (sweepFlag && angleExtent < 0) {
+				angleExtent += 360f;
+			}
+			angleExtent %= 360f;
+			angleStart %= 360f;
+	
+			// Arc2D.Float arc = new Arc2D.Float();
+			float _x = cx - rx;
+			float _y = cy - ry;
+			float _width = rx * 2.0f;
+			float _height = ry * 2.0f;
+	
+			RectF bounds = new RectF(_x, _y, _x + _width, _y + _height);
+	
+			if (path != null) {
+				path.arcTo(bounds, angleStart, angleExtent);
+			}
+			else {
+				addArc(new Arc(bounds, angleStart, angleExtent, mParsedAttributes.id));
+			}
 		}
-		// Get the current (x, y) coordinates of the path
-		// Point2D p2d = path.getCurrentPoint();
-
-		float x0 = mCurrentX; // (float) p2d.getX();
-		float y0 = mCurrentY; // (float) p2d.getY();
-		// Compute the half distance between the current and the final point
-		float dx2 = (x0 - x) / 2.0f;
-		float dy2 = (y0 - y) / 2.0f;
-		// Convert theta from degrees to radians
-		theta = (float) Math.toRadians(theta % 360f);
-
-		//
-		// Step 1 : Compute (x1, y1)
-		//
-		float x1 = (float) (Math.cos(theta) * (double) dx2 + Math.sin(theta)
-				* (double) dy2);
-		float y1 = (float) (-Math.sin(theta) * (double) dx2 + Math.cos(theta)
-				* (double) dy2);
-		// Ensure radii are large enough
-		rx = Math.abs(rx);
-		ry = Math.abs(ry);
-		float Prx = rx * rx;
-		float Pry = ry * ry;
-		float Px1 = x1 * x1;
-		float Py1 = y1 * y1;
-		double d = Px1 / Prx + Py1 / Pry;
-		if (d > 1) {
-			rx = Math.abs((float) (Math.sqrt(d) * (double) rx));
-			ry = Math.abs((float) (Math.sqrt(d) * (double) ry));
-			Prx = rx * rx;
-			Pry = ry * ry;
-		}
-
-		//
-		// Step 2 : Compute (cx1, cy1)
-		//
-		double sign = (largeArcFlag == sweepFlag) ? -1d : 1d;
-
-		// float coef = (float) (sign * Math
-		// .sqrt(((Prx * Pry) - (Prx * Py1) - (Pry * Px1))
-		// / ((Prx * Py1) + (Pry * Px1))));
-
-		double sq = (((Prx * Pry) - (Prx * Py1) - (Pry * Px1)) / ((Prx * Py1) + (Pry * Px1)));
-
-		sq = (sq < 0) ? 0 : sq;
-		float coef = (float) (sign * Math.sqrt(sq));
-
-		float cx1 = coef * ((rx * y1) / ry);
-		float cy1 = coef * -((ry * x1) / rx);
-
-		//
-		// Step 3 : Compute (cx, cy) from (cx1, cy1)
-		//
-		float sx2 = (x0 + x) / 2.0f;
-		float sy2 = (y0 + y) / 2.0f;
-		float cx = sx2
-				+ (float) (Math.cos(theta) * (double) cx1 - Math.sin(theta)
-						* (double) cy1);
-		float cy = sy2
-				+ (float) (Math.sin(theta) * (double) cx1 + Math.cos(theta)
-						* (double) cy1);
-
-		//
-		// Step 4 : Compute the angleStart (theta1) and the angleExtent (dtheta)
-		//
-		float ux = (x1 - cx1) / rx;
-		float uy = (y1 - cy1) / ry;
-		float vx = (-x1 - cx1) / rx;
-		float vy = (-y1 - cy1) / ry;
-		float p, n;
-		// Compute the angle start
-		n = (float) Math.sqrt((ux * ux) + (uy * uy));
-		p = ux; // (1 * ux) + (0 * uy)
-		sign = (uy < 0) ? -1d : 1d;
-		float angleStart = (float) Math.toDegrees(sign * Math.acos(p / n));
-		// Compute the angle extent
-		n = (float) Math.sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy));
-		p = ux * vx + uy * vy;
-		sign = (ux * vy - uy * vx < 0) ? -1d : 1d;
-		float angleExtent = (float) Math.toDegrees(sign * Math.acos(p / n));
-		if (!sweepFlag && angleExtent > 0) {
-			angleExtent -= 360f;
-		} else if (sweepFlag && angleExtent < 0) {
-			angleExtent += 360f;
-		}
-		angleExtent %= 360f;
-		angleStart %= 360f;
-
-		// Arc2D.Float arc = new Arc2D.Float();
-		float _x = cx - rx;
-		float _y = cy - ry;
-		float _width = rx * 2.0f;
-		float _height = ry * 2.0f;
-
-		RectF bounds = new RectF(_x, _y, _x + _width, _y + _height);
-
-		// if(animHandler!=null){
-		// animHandler.arcParams(mProperties.id, path, angleStart, angleExtent,
-		// bounds);
-		//
-		// }
-		// else{
-		// path.addArc(bounds, angleStart, angleExtent);
-		addArc(new Arc(bounds, angleStart, angleExtent, mParsedAttributes.id));
-		// }
 	}
 
 	/**
@@ -1951,22 +1957,12 @@ public class SVGParserRenderer extends DefaultHandler {
 
 	private class PathTokenizer {
 
-		// private static final String REGEXP_NUMBER =
-		// "([-+]?[0-9]*[\\.]?[0-9]+[eE]?[-]?[0-9]*)"; // [eE]?[-+]?[0-9]+
-		// private static final String REGEXP_NUM_EXPO =
-		// "([-+]?[0-9]*[\\.]?[0-9]+[eE][-]?[0-9]+)";
-		// private static final String REGEXP_NUMBER =
-		// "([-+]?[0-9]*[\\.]?[0-9]+)";
 		private static final String REGEXP_NUMBER = "([-+]?[0-9]*[\\.]?[0-9]+([eE][-+]?[0-9]+)?)";
-		private static final String REGEXP_LETTER = "([a-zA-Z_])"; // Matches
-																	// ONE
-																	// character.
+		private static final String REGEXP_LETTER = "([a-zA-Z_])"; // Matches ONE character.
 		private static final String REGEXP_SPACE = "([\\s+,\\(\\)]+)";
 
-		private static final String REGEXP_TOKENS = /* REGEXP_NUM_EXPO + "|" + */REGEXP_NUMBER
-				+ "|" + REGEXP_LETTER + "|" + REGEXP_SPACE;
+		private static final String REGEXP_TOKENS = REGEXP_NUMBER + "|" + REGEXP_LETTER + "|" + REGEXP_SPACE;
 
-		private static final int LTOK_NUM_EXPO = 9991;
 		private static final int LTOK_NUMBER = 1;
 		private static final int LTOK_LETTER = 3;
 		private static final int LTOK_SPACE = 4;
@@ -1998,8 +1994,7 @@ public class SVGParserRenderer extends DefaultHandler {
 						if (tokMatcher.start(LTOK_NUMBER) != -1) {
 							resultTok = LTOK_NUMBER;
 							try {
-								tokenF = Float.parseFloat(tokMatcher
-										.group(resultTok));
+								tokenF = Float.parseFloat(tokMatcher.group(resultTok));
 
 							} catch (NumberFormatException e_i) {
 								// Log.e(LOGTAG, "Number not parsed to float" );
