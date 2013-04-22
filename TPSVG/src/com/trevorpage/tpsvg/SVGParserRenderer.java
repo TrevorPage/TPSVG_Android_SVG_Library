@@ -1371,6 +1371,8 @@ public class SVGParserRenderer extends DefaultHandler {
 					// TODO: Could alternatively make use of rCubicTo if it's a
 					// relative command.
 					path.cubicTo(x1, y1, x2, y2, x, y);
+					mLastControlPointX = x2;
+					mLastControlPointY = y2;
 					mCurrentX = x;
 					mCurrentY = y;
 					if (segmentStart) {
