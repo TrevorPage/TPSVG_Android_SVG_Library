@@ -1,8 +1,8 @@
-package com.trevorpage.tpsvg;
+package co.uk.hardfault.dragonsvg;
 
 
-import com.trevorpage.tpsvg.SVGParserRenderer.SvgStyle;
-import com.trevorpage.tpsvg.SVGParserRenderer.Textstring;
+import co.uk.hardfault.dragonsvg.SVGParserRenderer.SvgStyle;
+import co.uk.hardfault.dragonsvg.SVGParserRenderer.Textstring;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;

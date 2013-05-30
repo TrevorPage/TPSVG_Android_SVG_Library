@@ -1,7 +1,7 @@
-package com.trevorpage.tpsvg.internal;
+package co.uk.hardfault.dragonsvg.internal;
 
-import com.trevorpage.tpsvg.SVGParserRenderer;
-import com.trevorpage.tpsvg.SVGPatternShader;
+import co.uk.hardfault.dragonsvg.SVGParserRenderer;
+import co.uk.hardfault.dragonsvg.SVGPatternShader;
 
 import android.graphics.Shader;
 

@@ -1,4 +1,4 @@
-package com.trevorpage.tpsvg;
+package co.uk.hardfault.dragonsvg;
 
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;

@@ -1,4 +1,4 @@
-package com.trevorpage.tpsvg;
+package co.uk.hardfault.dragonsvg;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapShader;

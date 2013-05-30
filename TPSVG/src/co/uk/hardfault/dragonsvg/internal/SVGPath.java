@@ -1,4 +1,4 @@
-package com.trevorpage.tpsvg.internal;
+package co.uk.hardfault.dragonsvg.internal;
 
 import java.util.ArrayList;
 

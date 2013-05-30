@@ -1,8 +1,8 @@
-package com.trevorpage.tpsvg.internal;
+package co.uk.hardfault.dragonsvg.internal;
 
 import java.util.ArrayList;
 
-import com.trevorpage.tpsvg.SVGParserRenderer.SvgStyle;
+import co.uk.hardfault.dragonsvg.SVGParserRenderer.SvgStyle;
 
 public class ParsedAttributes {
 	
@@ -44,6 +44,9 @@ public class ParsedAttributes {
 	
 	public ArrayList<Integer> rotations;
 	
+	public float mTextLength;
+	public boolean mRestrictToTextLength;
+	
 	public ParsedAttributes() {
     	transformData = null;
     	styleData = null;
@@ -53,5 +56,7 @@ public class ParsedAttributes {
     	stretchToRemainderWidth = false;
     	stretchToRemainderHeight = false;
     	rotations = new ArrayList<Integer>();
+    	mTextLength = 0;
+    	
 	}
 }

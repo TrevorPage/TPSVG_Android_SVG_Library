@@ -1,4 +1,4 @@
-package com.trevorpage.tpsvg;
+package co.uk.hardfault.dragonsvg;
 
 import java.io.File;
 import java.io.FileNotFoundException;

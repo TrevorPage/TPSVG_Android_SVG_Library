@@ -1,4 +1,4 @@
-package com.trevorpage.tpsvg;
+package co.uk.hardfault.dragonsvg;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -37,10 +37,13 @@ import android.graphics.Typeface;
 import android.util.Log;
 import android.view.View;
 
-import com.trevorpage.tpsvg.internal.Gradient;
-import com.trevorpage.tpsvg.internal.ParsedAttributes;
-import com.trevorpage.tpsvg.internal.PatternFill;
-import com.trevorpage.tpsvg.internal.SVGPath;
+import co.uk.hardfault.dragonsvg.dom.GroupNode;
+import co.uk.hardfault.dragonsvg.dom.Node;
+import co.uk.hardfault.dragonsvg.dom.PathNode;
+import co.uk.hardfault.dragonsvg.internal.Gradient;
+import co.uk.hardfault.dragonsvg.internal.ParsedAttributes;
+import co.uk.hardfault.dragonsvg.internal.PatternFill;
+import co.uk.hardfault.dragonsvg.internal.SVGPath;
 
 public class SVGParserRenderer extends DefaultHandler {
 
@@ -87,7 +90,29 @@ public class SVGParserRenderer extends DefaultHandler {
 
 	/** Supported standard SVG attributes */
 	private enum StandardAttributes {
-		x, y, x1, y1, x2, y2, cx, cy, fx, fy, r, rx, ry, height, width, d, transform, gradientTransform, style, href, id, opacity, fill, fill_opacity, font_size, font_family, stroke, stroke_fill, stroke_opacity, stroke_width, text_align, text_anchor, offset, points, viewBox, novalue;
+		x, y, 
+		x1, y1, 
+		x2, y2, 
+		cx, cy, 
+		fx, fy, 
+		r, rx, ry, 
+		height, width, 
+		d, 
+		transform, gradientTransform, 
+		style, 
+		href, 
+		id, 
+		opacity, 
+		fill, fill_opacity, 
+		font_size, font_family, 
+		stroke, stroke_fill, stroke_opacity, stroke_width, 
+		text_align, text_anchor, 
+		textLength,
+		lengthAdjust,
+		offset, 
+		points, 
+		viewBox, 
+		novalue;
 
 		public static StandardAttributes toAttr(String str) {
 			try {
@@ -158,7 +183,24 @@ public class SVGParserRenderer extends DefaultHandler {
 	private String mPrivateDataCurrentKey;
 
 	private HashMap<String, PatternFill> mPatternMap = new HashMap<String, PatternFill>();
+	
+	
+	
+	
+	
+	// -------------------------------------------------------------------------------------
+	// New stuff!
+	
+	
+	private GroupNode mCurrentGroupNode = new GroupNode();
 
+	
+
+	// -------------------------------------------------------------------------------------
+	
+	
+	
+	
 	public SVGParserRenderer() {
 		mPrivateDataMap = new HashMap<String, String>();
 	}
@@ -342,7 +384,7 @@ public class SVGParserRenderer extends DefaultHandler {
 			addBeginGroup(mParsedAttributes.id);
 		} else if (localName.equalsIgnoreCase(STARTTAG_PATH)) {
 			parseAttributes(attributes);
-			path();
+			mCurrentGroupNode.addChildNode(path());
 		} else if (localName.equalsIgnoreCase(STARTTAG_RECT)) {
 			parseAttributes(attributes);
 			rect();
@@ -527,17 +569,22 @@ public class SVGParserRenderer extends DefaultHandler {
 					break;
 
 				case font_size :
-					mParsedAttributes.svgStyle.strokePaint
-							.setTextSize(parseCoOrdinate(value));
-					mParsedAttributes.svgStyle.fillPaint
-							.setTextSize(parseCoOrdinate(value));
+					mParsedAttributes.svgStyle.strokePaint.setTextSize(parseCoOrdinate(value));
+					mParsedAttributes.svgStyle.fillPaint.setTextSize(parseCoOrdinate(value));
 					break;
 
 				case font_family :
 					Typeface typeface = getTypeface(value);
-					mParsedAttributes.svgStyle.strokePaint
-							.setTypeface(typeface);
+					mParsedAttributes.svgStyle.strokePaint.setTypeface(typeface);
 					mParsedAttributes.svgStyle.fillPaint.setTypeface(typeface);
+					break;
+					
+				case textLength:
+					mParsedAttributes.mTextLength = parseCoOrdinate(value);
+					break;
+					
+				case lengthAdjust:
+					mParsedAttributes.mRestrictToTextLength = true;
 					break;
 
 				case fill :
@@ -1118,8 +1165,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	 */
 	private void text_characters(char[] src, int srcPos, int length) {
 		// addStyle();
-		Textstring textString = new Textstring(mParsedAttributes.x,
-				mParsedAttributes.y, src, srcPos, length);
+		Textstring textString = new Textstring(mParsedAttributes.x, mParsedAttributes.y, src, srcPos, length);
 		textString.mAnchorRight = mParsedAttributes.anchorRight;
 		textstringList.add(textString);
 		// Assume for now that all textstrings have a matrix
@@ -1148,7 +1194,7 @@ public class SVGParserRenderer extends DefaultHandler {
 		addText();
 	}
 
-	private void path() {
+	private Node path() {
 		float rx, ry, x_axis_rotation, x, y, x1, y1, x2, y2;
 		boolean firstElement = true, carry = false, large_arc_flag, sweep_flag;
 		PathTokenizer t = new PathTokenizer();
@@ -1406,7 +1452,10 @@ public class SVGParserRenderer extends DefaultHandler {
 		} while (t.currentTok != PathTokenizer.LTOK_END);
 
 		setCustomPathAttributes(path);
-		addPath(path);
+		
+		Node node = new PathNode(path, mParsedAttributes.svgStyle.strokePaint, mParsedAttributes.svgStyle.fillPaint);
+		
+		return node;
 	}
 
 	private void polygon() {
@@ -2661,28 +2710,10 @@ public class SVGParserRenderer extends DefaultHandler {
 						mCanvas.concat(workingMatrix);
 
 						if (currentStrokePaint != null && !mSkipPattern) {
-
-							mCanvas.drawText(ts.string, 0, ts.string.length(),
-							/*
-							 * ts.mAnchorRight ? ts.x + remainderWidth :
-							 */ts.x, ts.y, currentStrokePaint);
-							// mCanvas.drawText(ts.string, 0,
-							// ts.string.length(),
-							// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
-							// matrixValues[Matrix.MTRANS_Y],
-							// currentStrokePaint);
+							mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x, ts.y, currentStrokePaint);
 						}
 						if (currentFillPaint != null && !mSkipPattern) {
-
-							mCanvas.drawText(ts.string, 0, ts.string.length(),
-							/*
-							 * ts.mAnchorRight ? ts.x + remainderWidth :
-							 */ts.x, ts.y, currentFillPaint);
-							// mCanvas.drawText(ts.string, 0,
-							// ts.string.length(),
-							// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
-							// matrixValues[Matrix.MTRANS_Y], currentFillPaint);
-
+							mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x, ts.y, currentFillPaint);
 						}
 
 						mCanvas.restore();
@@ -2860,7 +2891,8 @@ public class SVGParserRenderer extends DefaultHandler {
 		public int charLength;
 		private boolean mAnchorRight;
 		private boolean mAnchorBottom;
-
+		private int mTextLength;
+		private boolean mRestrictToTextLength;
 		public StringBuilder string;
 
 		public Textstring(float x, float y, char[] src, int srcPos, int length) {
@@ -2872,7 +2904,20 @@ public class SVGParserRenderer extends DefaultHandler {
 			this.charBuf[length] = 0;
 			this.string = new StringBuilder();
 			this.string.append(src, srcPos, length);
-
+			mTextLength = 0;
+			mRestrictToTextLength = false;
+		}
+		
+		public void setTextLength(int textLength) {
+			mTextLength = textLength;
+		}
+		
+		public int getTextLength() {
+			return mTextLength;
+		}
+		
+		public void setRestrictToTextLength(boolean restrictToTextLength) {
+			mRestrictToTextLength = restrictToTextLength;
 		}
 	}
 
