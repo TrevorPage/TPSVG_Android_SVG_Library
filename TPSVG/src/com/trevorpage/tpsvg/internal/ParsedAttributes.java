@@ -44,6 +44,9 @@ public class ParsedAttributes {
 	
 	public ArrayList<Integer> rotations;
 	
+	public float textLength;
+	public boolean textLengthAdjustSize;
+	
 	public ParsedAttributes() {
     	transformData = null;
     	styleData = null;

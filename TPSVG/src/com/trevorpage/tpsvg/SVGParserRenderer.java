@@ -41,6 +41,7 @@ import com.trevorpage.tpsvg.internal.Gradient;
 import com.trevorpage.tpsvg.internal.ParsedAttributes;
 import com.trevorpage.tpsvg.internal.PatternFill;
 import com.trevorpage.tpsvg.internal.SVGPath;
+import com.trevorpage.tpsvg.internal.Util;
 
 public class SVGParserRenderer extends DefaultHandler {
 
@@ -87,7 +88,7 @@ public class SVGParserRenderer extends DefaultHandler {
 
 	/** Supported standard SVG attributes */
 	private enum StandardAttributes {
-		x, y, x1, y1, x2, y2, cx, cy, fx, fy, r, rx, ry, height, width, d, transform, gradientTransform, style, href, id, opacity, fill, fill_opacity, font_size, font_family, stroke, stroke_fill, stroke_opacity, stroke_width, text_align, text_anchor, offset, points, viewBox, novalue;
+		x, y, x1, y1, x2, y2, cx, cy, fx, fy, r, rx, ry, height, width, d, transform, gradientTransform, style, href, id, opacity, fill, fill_opacity, font_size, font_family, stroke, stroke_fill, stroke_opacity, stroke_width, text_align, text_anchor, offset, points, viewBox, novalue, lengthAdjust, textLength;
 
 		public static StandardAttributes toAttr(String str) {
 			try {
@@ -104,7 +105,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	 * When used they are prefixed with CUSTOM_ATTRIBUTE_NAMESPACE
 	 */
 	private enum CustomAttributes {
-		anchor, stretch_to_remainder, visible_on_rotation, novalue;
+		anchor, stretch_to_remainder, visible_on_rotation, lengthAdjust, novalue;
 
 		public static CustomAttributes toAttr(String str) {
 			try {
@@ -416,6 +417,9 @@ public class SVGParserRenderer extends DefaultHandler {
 		mParsedAttributes.svgStyle.masterOpacity = 1;
 		mParsedAttributes.svgStyle.fillOpacity = 1;
 		mParsedAttributes.svgStyle.strokeOpacity = 1;
+		
+		mParsedAttributes.textLength = 0;
+		mParsedAttributes.textLengthAdjustSize = false;
 
 		// During execution of the loop, the length of attrImpl will expand if a
 		// <style> attribute
@@ -697,6 +701,11 @@ public class SVGParserRenderer extends DefaultHandler {
 					mParsedAttributes.svgStyle.strokePaint.setTextAlign(align);
 					mParsedAttributes.svgStyle.fillPaint.setTextAlign(align);
 					break;
+				
+				case textLength:
+					float length = parseCoOrdinate(value);
+					mParsedAttributes.textLength = length;
+					break;
 
 				case viewBox :
 					mParsedAttributes.viewBox = value;
@@ -741,6 +750,10 @@ public class SVGParserRenderer extends DefaultHandler {
 					valueCopy = null;
 					mParsedAttributes.rotations.add(Math.round(t.tokenF));
 				}
+				break;
+				
+			case lengthAdjust:
+				mParsedAttributes.textLengthAdjustSize = value.equalsIgnoreCase("size") ? true : false ;
 				break;
 
 			default :
@@ -1121,30 +1134,24 @@ public class SVGParserRenderer extends DefaultHandler {
 		Textstring textString = new Textstring(mParsedAttributes.x,
 				mParsedAttributes.y, src, srcPos, length);
 		textString.mAnchorRight = mParsedAttributes.anchorRight;
+		textString.mSizeToFitTextLength = mParsedAttributes.textLengthAdjustSize;
+		textString.setTextLength((int) mParsedAttributes.textLength);
 		textstringList.add(textString);
-		// Assume for now that all textstrings have a matrix
-		// if (mProperties.transformData != null) {
-		// addTransform();
-		// }
 		addText();
 	}
 
 	private void tspan_element() {
 		addStyle();
-		// if (mProperties.transformData != null) {
 		addTransform();
-		// }
 	}
 
 	private void tspan_characters(char[] src, int srcPos, int length) {
 		Textstring textString = new Textstring(mParsedAttributes.x,
 				mParsedAttributes.y, src, srcPos, length);
 		textString.mAnchorRight = mParsedAttributes.anchorRight;
+		textString.mSizeToFitTextLength = mParsedAttributes.textLengthAdjustSize;
+		textString.setTextLength((int) mParsedAttributes.textLength);
 		textstringList.add(textString);
-		// Assume for now that all textstrings have a matrix
-		// if (mProperties.transformData != null) {
-		// addTransform();
-		// }
 		addText();
 	}
 
@@ -2662,27 +2669,28 @@ public class SVGParserRenderer extends DefaultHandler {
 
 						if (currentStrokePaint != null && !mSkipPattern) {
 
-							mCanvas.drawText(ts.string, 0, ts.string.length(),
-							/*
-							 * ts.mAnchorRight ? ts.x + remainderWidth :
-							 */ts.x, ts.y, currentStrokePaint);
-							// mCanvas.drawText(ts.string, 0,
-							// ts.string.length(),
-							// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
-							// matrixValues[Matrix.MTRANS_Y],
-							// currentStrokePaint);
+							float savedTextSize = currentStrokePaint.getTextSize();
+							
+							if (ts.mTextLength > 0 && ts.mSizeToFitTextLength == true) {
+								currentStrokePaint.setTextSize(Util.bestFitValueTextSize(ts.mTextLength, savedTextSize, ts.string.toString()));
+							}
+							
+							mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x, ts.y, currentStrokePaint);
+							
+							currentStrokePaint.setTextSize(savedTextSize);
 						}
 						if (currentFillPaint != null && !mSkipPattern) {
 
-							mCanvas.drawText(ts.string, 0, ts.string.length(),
-							/*
-							 * ts.mAnchorRight ? ts.x + remainderWidth :
-							 */ts.x, ts.y, currentFillPaint);
-							// mCanvas.drawText(ts.string, 0,
-							// ts.string.length(),
-							// ts.x + matrixValues[Matrix.MTRANS_X], ts.y +
-							// matrixValues[Matrix.MTRANS_Y], currentFillPaint);
+							float savedTextSize = currentFillPaint.getTextSize();
+							
+							if (ts.mTextLength > 0 && ts.mSizeToFitTextLength == true) {
+								currentFillPaint.setTextSize(Util.bestFitValueTextSize(ts.mTextLength, savedTextSize, ts.string.toString()));
+							}
+							
+							mCanvas.drawText(ts.string, 0, ts.string.length(), ts.x, ts.y, currentFillPaint);
 
+							currentFillPaint.setTextSize(savedTextSize);
+							
 						}
 
 						mCanvas.restore();
@@ -2860,7 +2868,9 @@ public class SVGParserRenderer extends DefaultHandler {
 		public int charLength;
 		private boolean mAnchorRight;
 		private boolean mAnchorBottom;
-
+		private boolean mSizeToFitTextLength = false;
+		public int mTextLength = 0;
+		
 		public StringBuilder string;
 
 		public Textstring(float x, float y, char[] src, int srcPos, int length) {
@@ -2872,7 +2882,14 @@ public class SVGParserRenderer extends DefaultHandler {
 			this.charBuf[length] = 0;
 			this.string = new StringBuilder();
 			this.string.append(src, srcPos, length);
-
+		}
+		
+		public void setTextLength(int textLength) {
+			mTextLength = textLength;
+		}
+		
+		public int getTextLength() {
+			return mTextLength;
 		}
 	}
 
