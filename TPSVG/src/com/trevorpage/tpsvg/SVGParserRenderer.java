@@ -1175,6 +1175,12 @@ public class SVGParserRenderer extends DefaultHandler {
 		float segmentStartX = 0;
 		float segmentStartY = 0;
 		boolean segmentStart = true;
+		
+		/** 
+		 * Indicates when any segment has been added to the path. Implemented because 
+		 * path.isEmpty() appears to return true even if it's only had moveTo() called on it.
+		 */
+		boolean pathIsEmpty = true;
 
 		do {
 			if (t.currentTok == PathTokenizer.LTOK_LETTER) {
@@ -1216,7 +1222,7 @@ public class SVGParserRenderer extends DefaultHandler {
 					break;
 
 				case 'L' :
-				case 'l' :
+				case 'l' :					
 					x = t.tokenF;
 					t.getToken(null);
 					y = t.tokenF;
@@ -1232,6 +1238,7 @@ public class SVGParserRenderer extends DefaultHandler {
 						segmentStartY = mCurrentY;
 						segmentStart = false;
 					}
+					pathIsEmpty = false;
 					break;
 
 				case 'H' :
@@ -1247,6 +1254,7 @@ public class SVGParserRenderer extends DefaultHandler {
 						segmentStartY = mCurrentY;
 						segmentStart = false;
 					}
+					pathIsEmpty = false;
 					break;
 
 				case 'V' :
@@ -1262,6 +1270,7 @@ public class SVGParserRenderer extends DefaultHandler {
 						segmentStartY = mCurrentY;
 						segmentStart = false;
 					}
+					pathIsEmpty = false;
 					break;
 
 				case 'z' :
@@ -1304,8 +1313,8 @@ public class SVGParserRenderer extends DefaultHandler {
 					// isolated arc object which means it can be programmatically manipulated in 
 					// terms of start and sweep angle. Otherwise, it forms part of a complex
 					// Path object, and the arc can't be specially manipulated. 
-					if (t.getToken(null) == PathTokenizer.LTOK_END && path.isEmpty()) {
-						//arcTo(null, rx, ry, x_axis_rotation, large_arc_flag, sweep_flag, x, y);	
+					if (t.getToken(null) == PathTokenizer.LTOK_END && pathIsEmpty == true) {
+						arcTo(null, rx, ry, x_axis_rotation, large_arc_flag, sweep_flag, x, y);	
 					}
 					else {
 						arcTo(path, rx, ry, x_axis_rotation, large_arc_flag, sweep_flag, x, y);	
@@ -1319,6 +1328,7 @@ public class SVGParserRenderer extends DefaultHandler {
 						segmentStartY = mCurrentY;
 						segmentStart = false;
 					}
+					pathIsEmpty = false;
 					break;
 
 				case 'C' :
@@ -1356,6 +1366,7 @@ public class SVGParserRenderer extends DefaultHandler {
 						segmentStartY = mCurrentY;
 						segmentStart = false;
 					}
+					pathIsEmpty = false;
 					break;
 
 				case 'S' :
@@ -1387,20 +1398,24 @@ public class SVGParserRenderer extends DefaultHandler {
 						segmentStartY = mCurrentY;
 						segmentStart = false;
 					}
+					pathIsEmpty = false;
 					break;
 
 				case 'Q' :
 				case 'q' :
 					// TODO: To be completed!
+					pathIsEmpty = false;
 					break;
 
 				case 'T' :
 				case 't' :
 					// TODO: To be completed!
+					pathIsEmpty = false;
 					break;
 
 				default :
 					carry = true;
+					//pathIsEmpty = false;
 					break;
 
 			}
@@ -2704,7 +2719,6 @@ public class SVGParserRenderer extends DefaultHandler {
 
 				case INST_ARC :
 					Arc arc = arcsListIterator.next();
-					// Path path = new Path();
 					if (animHandler != null) {
 						animHandler.arcParams(arc.animId, carryPath,
 								arc.angleStart, arc.angleExtent, arc.bounds);
