@@ -2766,8 +2766,8 @@ public class SVGParserRenderer extends DefaultHandler {
 	 */
 	public static class SvgStyle {
 
-		Paint fillPaint;
-		Paint strokePaint;
+		public Paint fillPaint;
+		public Paint strokePaint;
 
 		boolean hasFill;
 		boolean hasStroke;
