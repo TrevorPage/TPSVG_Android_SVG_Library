@@ -1158,6 +1158,7 @@ public class SVGParserRenderer extends DefaultHandler {
 		textString.mAnchorRight = mParsedAttributes.anchorRight;
 		textString.mSizeToFitTextLength = mParsedAttributes.textLengthAdjustSize;
 		textString.setTextLength((int) mParsedAttributes.textLength);
+		textString.addVisibleOnRotations(mParsedAttributes.rotations);
 		textstringList.add(textString);
 		addText();
 	}
@@ -2647,6 +2648,14 @@ public class SVGParserRenderer extends DefaultHandler {
 
 			case INST_TEXTSTRING:
 				Textstring ts = textstringListIterator.next();
+				if (!ts.getVisibleOnRotation(rotation)) {
+					// Discard the ID
+					if (doSpecialIdCallbackForNextElement == true) {
+						idstringListIterator.next();
+						doSpecialIdCallbackForNextElement = false;
+					}
+					break;
+				}
 				workingMatrix.getValues(matrixValues);
 				// We might have already got the values for currentMatrix
 				// before, to save
@@ -2655,6 +2664,11 @@ public class SVGParserRenderer extends DefaultHandler {
 				// scaledPaint.setStrokeWidth(scaledPaint.getStrokeWidth() *
 				// ( (
 				// f[Matrix.MSCALE_Y] + f[Matrix.MSCALE_X] ) / 2 ) );
+
+				float translatePoints[] = new float[2];
+				translatePoints[0] = ts.x;
+				translatePoints[1] = ts.y;
+				workingMatrix.mapPoints(translatePoints);
 
 				animId = null;
 				animIteration = 0;
@@ -2671,20 +2685,14 @@ public class SVGParserRenderer extends DefaultHandler {
 							animId = idstringListIterator.next();
 						}
 						if (animHandler != null) {
-							// animMatrix.reset(); //Matrix animMatrix = new
-							// Matrix();
+
 							doSpecialIdCallbackForNextElement = animHandler
-									.animTextElement(
-											animId,
-											animIteration++,
-											animMatrix,
-											null,
-											ts,
-											ts.x
-													+ matrixValues[Matrix.MTRANS_X],
-											ts.y
-													+ matrixValues[Matrix.MTRANS_Y]);
-							// p.transform(animMatrix);
+									.animTextElement(animId, animIteration++,
+											animMatrix, currentStrokePaint,
+											currentFillPaint, ts,
+											translatePoints[0],
+											translatePoints[1]);
+						
 						} else {
 							doSpecialIdCallbackForNextElement = false;
 						}
@@ -2906,8 +2914,8 @@ public class SVGParserRenderer extends DefaultHandler {
 		private boolean mAnchorBottom;
 		private boolean mSizeToFitTextLength = false;
 		public int mTextLength = 0;
-
 		public StringBuilder string;
+		protected ArrayList<Integer> mVisibleOnRotations;
 
 		public Textstring(float x, float y, char[] src, int srcPos, int length) {
 			this.x = x;
@@ -2926,6 +2934,20 @@ public class SVGParserRenderer extends DefaultHandler {
 
 		public int getTextLength() {
 			return mTextLength;
+		}
+
+		public void addVisibleOnRotations(ArrayList<Integer> rotations) {
+			if (rotations != null && rotations.size() > 0) {
+				if (mVisibleOnRotations == null) {
+					mVisibleOnRotations = new ArrayList<Integer>();
+				}
+				mVisibleOnRotations.addAll(rotations);
+			}
+		}
+
+		public boolean getVisibleOnRotation(int rotation) {
+			return mVisibleOnRotations == null ? true : mVisibleOnRotations
+					.contains(rotation);
 		}
 	}
 

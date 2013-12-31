@@ -21,7 +21,6 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 
-import com.trevorpage.tpsvg.SVGParserRenderer.SvgStyle;
 import com.trevorpage.tpsvg.SVGParserRenderer.Textstring;
 
 public interface ITpsvgController {
@@ -70,7 +69,8 @@ public interface ITpsvgController {
 	 */
 
 	boolean animTextElement(String id, int iteration, Matrix matrix,
-			SvgStyle style, Textstring text, float x, float y);
+			Paint strokePaint, Paint fillPaint, Textstring text, float x,
+			float y);
 
 	boolean arcParams(String id, Path path, float startAngle, float sweepAngle,
 			RectF bounds);
@@ -80,4 +80,5 @@ public interface ITpsvgController {
 	void setSourceDocumentHeight(int height);
 
 	void onSVGPrivateData(String key, String value);
+
 }
