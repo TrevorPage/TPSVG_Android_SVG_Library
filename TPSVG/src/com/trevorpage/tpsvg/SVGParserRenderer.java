@@ -51,6 +51,7 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.View;
 
 import com.trevorpage.tpsvg.internal.Gradient;
@@ -1666,7 +1667,7 @@ public class SVGParserRenderer extends DefaultHandler {
 	 * For convenience, this method may or may not also handle the stripping of
 	 * quotation marks from the value string - this is TBD.
 	 */
-	private static float parseCoOrdinate(String value) {
+	private float parseCoOrdinate(String value) {
 		float result = 0f;
 
 		// Quick and dirty way to determine if the value appears to have a units
@@ -1674,9 +1675,34 @@ public class SVGParserRenderer extends DefaultHandler {
 		if (value.charAt(value.length() - 1) >= 'a') {
 			if (value.endsWith("px")) {
 				value = value.substring(0, value.length() - 2);
+			} else if (value.endsWith("cm")) {
+					value = value.substring(0, value.length() - 2);
+					result = Float.parseFloat(value);
+					result = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_MM, result*10.0f, 
+							mContext.getResources().getDisplayMetrics());
+					return result;
+			} else if (value.endsWith("mm")) {
+				value = value.substring(0, value.length() - 2);
+				result = Float.parseFloat(value);
+				result = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_MM, result, 
+						mContext.getResources().getDisplayMetrics());
+				return result;
+			} else if (value.endsWith("in")) {
+				value = value.substring(0, value.length() - 2);
+				result = Float.parseFloat(value);
+				result = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_IN, result, 
+						mContext.getResources().getDisplayMetrics());
+				return result;
+			} else if (value.endsWith("dp")) {
+				value = value.substring(0, value.length() - 2);
+				result = Float.parseFloat(value);
+				result = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, result, 
+						mContext.getResources().getDisplayMetrics());
+				return result;
 			} else {
 				// TODO: Add support in future for other units here.
 				// TODO: Call our error reporting function.
+				
 			}
 		}
 		try {
