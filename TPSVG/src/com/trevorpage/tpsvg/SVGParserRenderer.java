@@ -21,8 +21,10 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 import java.util.regex.Matcher;
@@ -41,6 +43,7 @@ import org.xml.sax.helpers.DefaultHandler;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
@@ -50,6 +53,7 @@ import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.util.Log;
 import android.view.View;
 
@@ -1686,7 +1690,11 @@ public class SVGParserRenderer extends DefaultHandler {
 		}
 		return result;
 	}
-
+	
+	static Pattern shortHexPattern = Pattern.compile("#([0-9a-f])([0-9a-f])([0-9a-f])([0-9a-f]?)");
+	static Pattern rgbPattern = Pattern.compile("rgb\\(([0-9]{1,3}),([0-9]{1,3}),([0-9]{1,3})\\)");
+	static Pattern argbPattern = Pattern.compile("rgba\\(([0-9]{1,3}),([0-9]{1,3}),([0-9]{1,3}),([0-9]{1,3})\\)");
+	private static List<String> alphaMissingColors = Arrays.asList(new String[] {"aqua", "fuchsia", "lime", "maroon", "navy", "olive", "purple", "silver", "teal"});
 	/**
 	 * Parse a basic data type of type &lt;color&gt;. See SVG specification
 	 * section: http://www.w3.org/TR/SVG/types.html#BasicDataTypes.
@@ -1695,38 +1703,54 @@ public class SVGParserRenderer extends DefaultHandler {
 	 */
 	private int parseColour(String value) {
 
-		int result = 0xffffff;
+		int color = Color.TRANSPARENT;
+		if (value != null) {
+			String lowval = value.trim().toLowerCase();
 
-		// Handle colour values that are in the format "rgb(r,g,b)"
-		if (value.startsWith("rgb")) {
-			int r, g, b;
-			ValueTokenizer t = new ValueTokenizer();
-			t.getToken(value.substring(3));
-			if (t.currentTok == ValueTokenizer.LTOK_NUMBER) {
-				r = (int) t.tokenF;
-				t.getToken(null);
-				if (t.currentTok == ValueTokenizer.LTOK_NUMBER) {
-					g = (int) t.tokenF;
-					t.getToken(null);
-					if (t.currentTok == ValueTokenizer.LTOK_NUMBER) {
-						b = (int) t.tokenF;
-						result = (r << 16) + (g << 8) + b;
+			Matcher m = null;
+			if ((m = shortHexPattern.matcher(lowval)).matches()) {
+				StringBuilder sb = new StringBuilder();
+				sb.append("#");
+				for(int i = 1; i <= m.groupCount(); i++) {
+					String s = m.group(i);
+					sb.append(s).append(s);
+				}
+				String newColor = sb.toString();
+				color = Color.parseColor(newColor);
+			} else if ((m = rgbPattern.matcher(lowval)).matches()) {
+				color = Color.rgb(
+					Integer.valueOf(m.group(1)),
+					Integer.valueOf(m.group(2)),
+					Integer.valueOf(m.group(3))
+					);
+			} else if ((m = argbPattern.matcher(lowval)).matches()) {
+				color = Color.argb(
+						Integer.valueOf(m.group(4)),
+						Integer.valueOf(m.group(1)),
+						Integer.valueOf(m.group(2)),
+						Integer.valueOf(m.group(3))
+						);
+			} else {
+				// Try the parser, will throw illegalArgument if it can't parse it.
+				try {
+					
+					color = Color.parseColor(lowval);
+					// In 4.3, Google introduced some new string color constants and they forgot to
+					// add the alpha bits to them! This is a temporary workaround 
+					// until they fix it. I've created a Google ticket for this:
+					// https://code.google.com/p/android/issues/detail?id=58352&thanks=58352
+					if (Build.VERSION.SDK_INT > 17 && alphaMissingColors.contains(lowval)) {
+						color = Color.parseColor(lowval) | 0xFF000000;
+					} else {
+						color = Color.parseColor(lowval);
 					}
+				} catch (IllegalArgumentException e) {
+					Log.w(LOGTAG, "Unknown color: " + value);
+					return 0xff0000;
 				}
 			}
 		}
-
-		// Handle colour values that are in the format #123abc. (Assume that's
-		// what it is,
-		// if the length is seven characters).
-		else if (value.length() == 7) {
-			try {
-				result = Integer.parseInt(value.substring(1, 7), 16);
-			} catch (NumberFormatException e) {
-				result = 0xff0000;
-			}
-		}
-		return result;
+		return color;
 	}
 
 	private float parseAttrValueFloat(String value) {
